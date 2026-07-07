@@ -1,7 +1,7 @@
 ---
-title: "Write a custom .rink scraper plugin for nano"
+title: "nano .rink format: write and compile custom plugins"
 sidebarTitle: "Rink Format"
-description: "A .rink file is an AES-256-CBC encrypted CommonJS module that exports a ScraperPlugin object. Learn how to write, compile, and install a custom scraper source."
+description: "A .rink file is an AES-256-CBC encrypted CommonJS module exporting a ScraperPlugin. Learn how to write, compile, and install a custom nano scraper source."
 ---
 
 A `.rink` file is an encrypted CommonJS module. Before encryption it is a plain `.js` (or `.ts`) file that exports a `ScraperPlugin` object — or an array of them. nano's build pipeline compiles the source with esbuild, encrypts the resulting bundle with AES-256-CBC, and stores the ciphertext as a binary file. At runtime, `getPlugins()` reverses this process in memory: it decrypts and evaluates the bundle, then registers the resulting exports as active stream providers.

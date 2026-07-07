@@ -1,16 +1,16 @@
 ---
-title: "nano scraper plugin system: installing and managing sources"
+title: "nano scraper plugin system: sources and API reference"
 sidebarTitle: "Plugins"
-description: "nano uses encrypted .rink plugin files to resolve stream URLs. Install bundled sources with the shiopa CLI or create custom plugins that implement the ScraperPlugin interface."
+description: "nano resolves streams via encrypted .rink plugin files. Install catalog sources with shiopa or build custom plugins using the ScraperPlugin interface."
 ---
 
-nano's stream resolution is powered by a plugin system. Each plugin is a `.rink` file — an AES-256-CBC encrypted JavaScript module that exports an object implementing the `ScraperPlugin` interface. Plugins live in `src/shade/private/` and are loaded at build time by Vite's glob import, decrypted in memory, and executed at runtime. No plugin source code is ever exposed to the client.
+nano's stream resolution is powered by a plugin system. Each plugin is a `.rink` file — an AES-256-CBC encrypted JavaScript module that exports an object implementing the `ScraperPlugin` interface. Plugins are loaded from `src/shade/catalog/` and `src/shade/private/` at build time by Vite's glob import, decrypted in memory, and executed at runtime. No plugin source code is ever exposed to the client.
 
 ## How plugins work
 
 <Steps>
   <Step title="Glob import at build time">
-    Vite loads all `.rink` files from both `src/shade/catalog/` and `src/shade/private/` as `Uint8Array` binary data using `import.meta.glob` with the `?uint8array` query. The catalog directory contains bundled pre-compiled sources; the private directory is where activated plugins live.
+    Vite loads all `.rink` files from both `src/shade/catalog/` and `src/shade/private/` as `Uint8Array` binary data using `import.meta.glob` with the `?uint8array` query. Both directories are active: catalog holds the pre-compiled bundled sources that ship with the package; private holds any additionally activated plugins copied there by `shiopa add`. Plugins in both directories are loaded and registered at runtime.
   </Step>
   <Step title="Decrypt and execute at runtime">
     `getPlugins()` iterates every loaded module, decrypts the binary content with a derived AES-256-CBC key, then evaluates the resulting CommonJS string with a sandboxed `new Function(...)` call. Each executed module's exports are collected into an array of `ScraperPlugin` objects. Duplicate `key` values are deduplicated — first occurrence wins.

@@ -1,7 +1,7 @@
 ---
 title: "GET /api/scrape — resolve a playable stream URL"
-sidebarTitle: "/api/scrape"
-description: "Resolve a playable stream URL for a movie or TV episode by TMDB ID using an installed scraper plugin. Returns proxied stream URL, HLS flag, subtitles, and quality options."
+sidebarTitle: "Scrape"
+description: "Resolve a stream URL for a movie or TV episode by TMDB ID via a scraper plugin. Returns a proxied URL, HLS flag, subtitle tracks, and quality variants."
 ---
 
 `/api/scrape` is nano's stream-resolution endpoint. Given a TMDB ID, media type, and an optional provider ID, it invokes the matching `.rink` scraper plugin to find a playable stream URL. The returned URL is always wrapped in a `/api/proxy` call so the browser can play it without CORS issues. Subtitles are automatically fetched from `sub.vdrk.site` and merged with any plugin-provided subtitles.
@@ -27,8 +27,8 @@ description: "Resolve a playable stream URL for a movie or TV episode by TMDB ID
   Episode number. Only used when `type=tv`.
 </ParamField>
 
-<ParamField query="provider" type="string">
-  The scraper plugin ID to use (e.g. `"rei"`). The provider must be present in the configured server allow-list. If it is not, the request falls back to the configured `DEFAULT_SERVER`. When omitted, the default server is used directly.
+<ParamField query="provider" type="string" default="nemu">
+  The scraper plugin ID to use (e.g. `"rei"`). The value is validated against the server allow-list defined in `shiopaConfig.features.videoPlayer.servers`. If the requested provider is not in the allow-list, the endpoint falls back to the configured `defaultServer` (defaults to `"rei"` in production). When omitted, `"nemu"` is used as the initial value, subject to the same allow-list check.
 </ParamField>
 
 ## Response

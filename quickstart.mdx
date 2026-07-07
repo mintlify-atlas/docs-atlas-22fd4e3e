@@ -1,5 +1,5 @@
 ---
-title: "Get started with nano in under 5 minutes"
+title: "Run nano locally or deploy it via Docker in minutes"
 sidebarTitle: "Quickstart"
 description: "Run nano locally or in Docker in minutes. Install dependencies, configure environment variables, add stream sources, and launch the dev server."
 ---
@@ -70,13 +70,13 @@ nano is designed to be running in minutes regardless of your setup. Pick the pat
       </Step>
 
       <Step title="Configure the application">
-        Run the interactive setup script. It copies `.env.example` to `.env` and prints a summary of your current configuration:
+        Run the setup script. It checks whether a `.env` file already exists; if not, it copies `.env.example` to `.env` automatically. It then prints a brief config summary (site name, theme mode, background style, and default server) and reminds you to edit `.env` before starting the server:
 
         ```bash
         node setup.js
         ```
 
-        The script will confirm the site name, theme mode, background style, and default server, then remind you to edit `.env` before starting the server. Open `.env` in your editor and adjust any values you want to change — all fields are optional and have sensible defaults.
+        Open `.env` in your editor and adjust any values you want to change — all fields are optional and have sensible defaults.
       </Step>
 
       <Step title="Add stream sources">

@@ -1,10 +1,10 @@
 ---
-title: "Deploy nano to Cloudflare Workers and Pages"
+title: "Deploy nano to Cloudflare Workers via Wrangler CLI"
 sidebarTitle: "Cloudflare"
 description: "Deploy nano to Cloudflare Workers using the Astro Cloudflare adapter. Understand feature limitations including local file streaming and PostgreSQL support."
 ---
 
-Cloudflare Workers and Pages offer globally distributed, low-latency hosting for nano. When nano detects that it is being built for Cloudflare, it automatically switches to the `@astrojs/cloudflare` adapter, compiling the app into a `_worker.js` bundle that runs natively in the Workers runtime. The repository ships a `wrangler.toml` that pre-configures the deployment.
+Cloudflare Workers provides globally distributed, low-latency hosting for nano. When nano detects that it is being built for Cloudflare, it automatically switches to the `@astrojs/cloudflare` adapter, compiling the app into a `_worker.js` bundle that runs natively in the Workers runtime. The repository ships a `wrangler.toml` that pre-configures the Workers deployment — static assets are served via the Workers Assets feature, with no separate Pages project required.
 
 ## How nano Detects Cloudflare
 
@@ -37,6 +37,7 @@ HOST = "0.0.0.0"
 
 - **`main`** — points to the compiled Worker entry file produced by `pnpm build`.
 - **`compatibility_flags = ["nodejs_compat"]`** — enables Node.js compatibility APIs in the Workers runtime (required for Astro's Cloudflare adapter).
+- **`keep_vars = true`** — preserves existing Worker variables during deploys so secrets set in the Cloudflare dashboard are not overwritten.
 - **`[assets]`** — serves the static files from the `dist/` directory alongside the Worker.
 - **`[vars]`** — sets `PORT` and `HOST` as Worker environment variables. Additional runtime variables can be added here or configured in the Cloudflare dashboard.
 
@@ -79,10 +80,10 @@ HOST = "0.0.0.0"
 
   <Step title="Deploy with Wrangler">
     ```bash
-    wrangler pages deploy dist/
+    wrangler deploy
     ```
 
-    Wrangler uploads your `dist/` directory to Cloudflare Pages. On first run, Wrangler asks you to authenticate and select or create a Pages project. Subsequent deploys update the same project.
+    Wrangler reads `wrangler.toml`, uploads `dist/_worker.js` and the static assets in `dist/` to Cloudflare Workers. On first run, Wrangler asks you to authenticate and creates the Worker. Subsequent deploys update the same Worker.
   </Step>
 </Steps>
 

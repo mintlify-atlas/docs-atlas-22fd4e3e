@@ -1,14 +1,14 @@
 ---
-title: "nano supports 16 UI languages out of the box"
+title: "nano supports 17 UI languages out of the box"
 sidebarTitle: "Internationalization"
-description: "nano ships full UI translations for 16 languages. Set a default locale with DEFAULT_LOCALE and let users switch languages via the header language selector."
+description: "nano ships full UI translations for 17 languages. Set a default locale with DEFAULT_LOCALE and let users switch languages via the header language selector."
 ---
 
-nano ships with complete UI translations for 16 languages. Every user-facing string — search placeholders, greetings, buttons, error messages, auth labels, admin panel copy, and video player controls — is served in the user's selected language. The active locale also controls the language in which TMDB returns movie and TV show metadata (titles, overviews, and cast information).
+nano ships with complete UI translations for 17 languages. Every user-facing string — search placeholders, greetings, buttons, error messages, auth labels, admin panel copy, and video player controls — is served in the user's selected language. The active locale also controls the language in which TMDB returns movie and TV show metadata (titles, overviews, and cast information).
 
 ## Supported languages
 
-The `TRANSLATIONS` object in `src/components/shiopa/locales/translations.ts` defines every supported locale. The following 16 language codes are available out of the box:
+The `TRANSLATIONS` object in `src/components/shiopa/locales/translations.ts` defines every supported locale. The following 17 language codes are available out of the box:
 
 | Code | Language |
 |------|----------|
@@ -27,6 +27,7 @@ The `TRANSLATIONS` object in `src/components/shiopa/locales/translations.ts` def
 | `vi` | Vietnamese |
 | `nl` | Dutch |
 | `tr` | Turkish |
+| `no` | Norwegian |
 | `genz` | Gen Z (English variant) |
 
 Arabic (`ar`) is the only right-to-left locale. nano detects this and sets `dir="rtl"` on the `<html>` element, mirroring the speech bubble, navigation layout, and text alignment automatically.
@@ -37,7 +38,7 @@ Arabic (`ar`) is the only right-to-left locale. nano detects this and sets `dir=
 DEFAULT_LOCALE=en   # default
 ```
 
-`DEFAULT_LOCALE` sets the locale used for server-side rendering and for users who have not yet made a language selection. Any of the 16 locale codes listed above is a valid value.
+`DEFAULT_LOCALE` sets the locale used for server-side rendering and for users who have not yet made a language selection. Any of the 17 locale codes listed above is a valid value.
 
 The resolved locale is determined in this order:
 
@@ -120,4 +121,4 @@ petMad1         // reaction when clicked repeatedly
 petHorror1      // reaction when a horror title is searched
 ```
 
-Each of these keys is present for all 16 locales. New locales can be added by extending the `TRANSLATIONS` record with a new language code key and providing values for every key in the `en` entry.
+Each of these keys is present for all 17 locales. New locales can be added by extending the `TRANSLATIONS` record with a new language code key and providing values for every key in the `en` entry.

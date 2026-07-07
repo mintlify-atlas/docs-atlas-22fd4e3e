@@ -1,7 +1,7 @@
 ---
 title: "GET /api/details — fetch title metadata from TMDB"
-sidebarTitle: "/api/details"
-description: "Fetch detailed metadata for a movie or TV show by TMDB ID. Returns title, overview, genres, cast, season info, and more. Adult content is blocked at this endpoint."
+sidebarTitle: "Details"
+description: "Fetch full metadata for a movie or TV show by TMDB ID. Returns title, overview, genres, cast, season info, and more. Adult content returns HTTP 403."
 ---
 
 `/api/details` retrieves full metadata for a movie, TV show, or specific TV season from the TMDB API. nano uses this endpoint to populate title pages, episode selectors, and the scrape pipeline's adult-content check. The raw TMDB response is passed through directly, giving you access to the complete set of fields TMDB provides.

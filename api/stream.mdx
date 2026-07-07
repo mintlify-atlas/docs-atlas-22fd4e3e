@@ -1,7 +1,7 @@
 ---
-title: "GET /api/stream — serve local video files with range support"
-sidebarTitle: "/api/stream"
-description: "nano's local stream endpoint serves video files from the server filesystem with HTTP range request support. Used for the local media library feature on Node.js deployments."
+title: "GET /api/stream — serve local files with range support"
+sidebarTitle: "Stream"
+description: "Serve local video files from the server filesystem with HTTP range support. Powers nano's local media library on Node.js. Not supported on Cloudflare."
 ---
 
 `/api/stream` serves video files directly from the server's filesystem. It supports HTTP Range requests so browsers and media players can seek through large files without downloading them entirely. This endpoint powers nano's local media library feature, which lets you point nano at a directory of video files and play them through the same player interface used for scraped streams.

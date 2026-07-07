@@ -31,13 +31,15 @@ nano stores user accounts in the configured database. Two database types are sup
     DATABASE_URL=postgresql://user:password@host:5432/dbname
     ```
 
-    nano uses the `DATABASE_URL` connection string to connect to PostgreSQL. The users table must have the following schema:
+    nano uses the `DATABASE_URL` connection string to connect to PostgreSQL. nano creates the table automatically on startup, but for reference the schema is:
 
     ```sql
-    CREATE TABLE users (
-      username TEXT PRIMARY KEY,
-      password TEXT NOT NULL,
-      salt     TEXT NOT NULL
+    CREATE TABLE IF NOT EXISTS users (
+      id         SERIAL PRIMARY KEY,
+      username   VARCHAR(50) UNIQUE NOT NULL,
+      password   VARCHAR(255) NOT NULL,
+      salt       VARCHAR(255),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     ```
   </Tab>
@@ -46,7 +48,7 @@ nano stores user accounts in the configured database. Two database types are sup
     DATABASE_TYPE=json
     ```
 
-    When `DATABASE_TYPE=json` (or `DATABASE_URL` is not set), nano persists user data in a local JSON file on the server's filesystem. No additional configuration is required.
+    When `DATABASE_URL` is not set and `DATABASE_TYPE` is unset or set to `json`, nano persists user data in a local `database.json` file on the server's filesystem. No additional configuration is required.
 
     <Warning>
       The JSON database stores user credentials in a plain file on disk. It is **not suitable** for production multi-user deployments. Use PostgreSQL for any instance shared with more than a handful of trusted people.
@@ -76,7 +78,7 @@ export async function handleSignup(username: string, password: string) {
 }
 ```
 
-**Login** — the stored salt is retrieved for the given username, the submitted password is hashed with the same parameters, and the result is compared to the stored hash:
+**Login** — the stored salt is retrieved for the given username, the submitted password is hashed with the same parameters, and the result is compared to the stored hash. Accounts created before salted hashing was introduced fall back to a direct password comparison:
 
 ```typescript
 export async function handleLogin(username: string, password: string) {
@@ -84,8 +86,15 @@ export async function handleLogin(username: string, password: string) {
   if (res.rows.length === 0) throw new Error("User not found");
 
   const user = res.rows[0];
-  const hash = hashPassword(password, user.salt);
-  if (user.password !== hash) throw new Error("Invalid password");
+  const salt = user.salt;
+
+  if (salt) {
+    const hash = hashPassword(password, salt);
+    if (user.password !== hash) throw new Error("Invalid password");
+  } else {
+    // Legacy: accounts without a salt use a plain-text comparison
+    if (user.password !== password) throw new Error("Invalid password");
+  }
 }
 ```
 

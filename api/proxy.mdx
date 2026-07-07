@@ -1,7 +1,7 @@
 ---
 title: "GET /api/proxy — CORS proxy for HLS streams"
-sidebarTitle: "/api/proxy"
-description: "nano's server-side proxy fetches remote stream URLs, rewrites M3U8 playlist segment paths through the proxy, and strips restrictive CORS/CSP headers for browser playback."
+sidebarTitle: "Proxy"
+description: "nano's CORS proxy fetches remote URLs, rewrites M3U8 segments through the proxy, and strips CSP and framing headers for in-browser HLS playback."
 ---
 
 `/api/proxy` is the core of nano's streaming infrastructure. It fetches remote URLs from the server, rewrites HLS playlist segment paths so they also pass through the proxy, and strips restrictive response headers (such as `Content-Security-Policy` and `X-Frame-Options`) that would otherwise prevent the browser from playing the stream. Every URL returned by `/api/scrape` is already wrapped in a proxy URL — you do not need to proxy them again yourself.

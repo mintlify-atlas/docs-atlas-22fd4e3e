@@ -107,6 +107,9 @@ const hls = new Hls({
   autoStartLoad: true,
   capLevelToPlayerSize: true,
   enableWorker: true,
+  xhrSetup: (xhr) => {
+    xhr.withCredentials = false;
+  },
 });
 ```
 

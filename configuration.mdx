@@ -1,7 +1,7 @@
 ---
-title: "Configure nano with environment variables"
+title: "Configure nano runtime settings with environment vars"
 sidebarTitle: "Configuration"
-description: "All nano settings are controlled via environment variables. Covers server, TMDB, database, theming, features, and video player options with defaults and valid values."
+description: "All nano settings are controlled by environment variables. Covers TMDB, database, theming, features, and player options with defaults and valid values."
 ---
 
 nano is configured entirely at runtime via environment variables — there is no settings UI and no database-backed config table. Every option from the site name to the video player behaviour is a single env var. This means you can reconfigure a running Docker container by restarting it with different flags, or adjust a local instance by editing `.env` and restarting the dev server, all without touching source code or triggering a new build.
@@ -209,7 +209,7 @@ Settings that control stream playback behaviour and the video player interface.
 |---|---|---|
 | `AUTOPLAY` | `true` | Automatically start video playback when a stream loads. `true` or `false`. |
 | `USE_VIDSTACK` | `false` | Use the advanced [Vidstack](https://vidstack.io) player instead of the built-in custom HTML5 player. `true` or `false`. Vidstack provides quality selection, keyboard shortcuts, and richer controls. |
-| `DEFAULT_SERVER` | `nemu` | Default scraper server ID loaded when opening the player. The production default in `config.shiopa.ts` is `rei`; `.env.example` ships with `nemu`. Set this to your preferred server ID. |
+| `DEFAULT_SERVER` | `rei` | Default scraper server ID loaded when opening the player. The code default is `rei`; `.env.example` ships `nemu` as a starting suggestion. Set this to your preferred server ID. |
 
 <Note>
   Available server IDs depend on which `.rink` plugin files you have installed. The full list of IDs for your instance is printed by the `shiopa` CLI when you add sources. In development mode additional servers (`momo`, `xpass`, `hana`, `nemu`, `kisskh`, `haru`, `sora`, `yuki`, and more) are exposed automatically.

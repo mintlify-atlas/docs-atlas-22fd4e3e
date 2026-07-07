@@ -1,7 +1,7 @@
 ---
 title: "nano REST API: built-in endpoints for search and streaming"
 sidebarTitle: "Overview"
-description: "nano exposes a set of server-side REST API endpoints for search, metadata, stream resolution, proxying, and local file streaming. All endpoints use GET requests."
+description: "nano's built-in REST API covers search, metadata, stream resolution, proxying, local file streaming, and library management. All data endpoints use GET."
 ---
 
 nano ships with a set of built-in REST API endpoints that power everything from the search bar to HLS stream playback. These endpoints run server-side as part of the Astro SSR application — no separate API server is needed. You can call them directly from any HTTP client or use them to integrate nano's capabilities into your own frontend.
@@ -18,7 +18,7 @@ In production, replace this with your deployed domain (e.g. `https://nano.exampl
 
 ## HTTP Methods
 
-All data endpoints use `GET` requests. The only exception is `/api/auth`, which uses `POST` for login, signup, and logout actions.
+All data endpoints use `GET` requests. The exceptions are `/api/auth` (which uses `POST` for login, signup, and logout) and `/api/library` (which supports both `GET` and `POST`).
 
 ## Authentication
 
@@ -42,20 +42,21 @@ Most endpoints require no authentication. If you have set `ENABLE_AUTH=true` in 
   <Card title="/api/stream" icon="film" href="/api/stream">
     Serve local video files from the server filesystem with HTTP range request support. Used for the local media library feature on Node.js deployments.
   </Card>
-  <Card title="/api/stream" icon="film" href="/api/stream">
-    Serve local video files from the server filesystem with HTTP range request support. Used for the local media library feature on Node.js deployments.
-  </Card>
 </CardGroup>
 
 ## Additional Endpoints
 
 ### `GET /api/trending`
 
-Returns trending movies and TV shows from TMDB. Used internally by the homepage when `SHOW_TRENDING=true` is set. No query parameters required. Returns `{ results: TmdbResult[] }`.
+Returns up to 6 trending movies and TV shows fetched from TMDB's `trending/all/day` endpoint. Used internally by the homepage when `SHOW_TRENDING=true` is set. No query parameters required. Returns `{ results: TmdbResult[] }`. Falls back to a static list of popular titles if TMDB is unavailable.
 
 ```bash
 curl "http://localhost:3000/api/trending"
 ```
+
+### `GET /api/library` and `POST /api/library`
+
+Reads and writes a `rink.json` local media library config file on the server filesystem. Only available on Node.js deployments — returns HTTP `501` on Cloudflare environments. See the [Local Library](/features/local-library) feature guide for details.
 
 ### `POST /api/auth`
 
