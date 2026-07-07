@@ -1,47 +1,125 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get started with nano in under 5 minutes"
+sidebarTitle: "Quickstart"
+description: "Run nano locally or in Docker in minutes. Install dependencies, configure environment variables, add stream sources, and launch the dev server."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
+nano is designed to be running in minutes regardless of your setup. Pick the path that fits your workflow — Docker if you want a zero-fuss deployment, or local development if you want to customise the source or contribute. Both paths produce a fully working instance at the end.
 
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+<Tabs>
+  <Tab title="Docker (no coding needed)">
+    Docker is the fastest way to get nano up and running. The pre-built image on the GitHub Container Registry is ready to go — no Node.js, no package managers, no build step required.
 
-## Prerequisites
+    <Steps>
+      <Step title="Pull the latest image">
+        Pull the official nano image from the GitHub Container Registry:
 
-Before you begin, you must have:
+        ```bash
+        docker pull ghcr.io/mohameodo/nano:latest
+        ```
+      </Step>
 
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
+      <Step title="Run the container">
+        Start nano on port 3000. You can pass any environment variable with `-e` to customise the instance at launch:
 
-## Get started
+        ```bash
+        docker run -p 3000:3000 -e SITE_NAME="my nano site" ghcr.io/mohameodo/nano:latest
+        ```
 
-<Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+        To pass a full configuration file instead of individual flags, mount a `.env` file:
 
-    ```bash
-    npm install your-package
-    ```
-  </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+        ```bash
+        docker run -p 3000:3000 --env-file .env ghcr.io/mohameodo/nano:latest
+        ```
+      </Step>
 
-    ```bash
-    your-cli init
-    ```
-  </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+      <Step title="Open nano in your browser">
+        Navigate to [http://localhost:3000](http://localhost:3000). You should see the nano home screen with live TMDB search ready to use.
+      </Step>
 
-    ```bash
-    your-cli start
-    ```
-  </Step>
-</Steps>
+      <Step title="(Optional) Customise with environment variables">
+        Nano is fully configured through environment variables. Copy `.env.example` from the repository as a starting point, edit the values you want to change, and re-run the container with `--env-file .env`.
+
+        See the [Configuration](/configuration) reference for every available option.
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Local development">
+    Running nano locally gives you hot-reload, full access to the source, and the ability to add or write custom `.rink` plugins.
+
+    <Steps>
+      <Step title="Clone the repository">
+        ```bash
+        git clone https://github.com/mohameodo/nano.git && cd nano
+        ```
+      </Step>
+
+      <Step title="Install dependencies">
+        nano supports both **pnpm** and **bun** as package managers.
+
+        <CodeGroup>
+          ```bash pnpm
+          pnpm install
+          ```
+
+          ```bash bun
+          bun install
+          ```
+        </CodeGroup>
+      </Step>
+
+      <Step title="Configure the application">
+        Run the interactive setup script. It copies `.env.example` to `.env` and prints a summary of your current configuration:
+
+        ```bash
+        node setup.js
+        ```
+
+        The script will confirm the site name, theme mode, background style, and default server, then remind you to edit `.env` before starting the server. Open `.env` in your editor and adjust any values you want to change — all fields are optional and have sensible defaults.
+      </Step>
+
+      <Step title="Add stream sources">
+        nano resolves streams through `.rink` plugin files. Use the `shiopa` CLI to install the default set of sources:
+
+        ```bash
+        npx shiopa add --all
+        ```
+
+        Or, if you prefer to use your local package manager:
+
+        ```bash
+        pnpm shiopa add --all
+        ```
+
+        You can also add individual sources by name: `npx shiopa add <source-id>`.
+      </Step>
+
+      <Step title="Start the development server">
+        <CodeGroup>
+          ```bash pnpm
+          pnpm dev
+          ```
+
+          ```bash bun
+          bun run dev
+          ```
+        </CodeGroup>
+
+        Astro will compile the project and start a local server with hot-module replacement enabled.
+      </Step>
+
+      <Step title="Open nano in your browser">
+        Navigate to [http://localhost:4321](http://localhost:4321) — the default Astro dev server port. The nano home screen should load immediately with live search and streaming ready to use.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
 
 <Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
-
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+  **TMDB API key is optional.** nano ships with a built-in TMDB API key fallback, so search and metadata work out of the box without any configuration. If you hit rate limits or want full control, register for a free key at [themoviedb.org](https://www.themoviedb.org/settings/api) and set `TMDB_API_KEY` in your `.env`.
 </Tip>
+
+<Note>
+  The steps above get you running with sensible defaults. For a full list of every environment variable — theming, auth, video player options, ghost companion settings, and more — see the [Configuration](/configuration) reference.
+</Note>

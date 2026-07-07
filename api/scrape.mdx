@@ -1,0 +1,152 @@
+---
+title: "GET /api/scrape — resolve a playable stream URL"
+sidebarTitle: "/api/scrape"
+description: "Resolve a playable stream URL for a movie or TV episode by TMDB ID using an installed scraper plugin. Returns proxied stream URL, HLS flag, subtitles, and quality options."
+---
+
+`/api/scrape` is nano's stream-resolution endpoint. Given a TMDB ID, media type, and an optional provider ID, it invokes the matching `.rink` scraper plugin to find a playable stream URL. The returned URL is always wrapped in a `/api/proxy` call so the browser can play it without CORS issues. Subtitles are automatically fetched from `sub.vdrk.site` and merged with any plugin-provided subtitles.
+
+## Request
+
+**Method:** `GET`  
+**Path:** `/api/scrape`
+
+<ParamField query="id" type="string" required>
+  The TMDB ID of the movie or TV show to stream.
+</ParamField>
+
+<ParamField query="type" type="string" default="movie">
+  Media type: `"movie"` or `"tv"`.
+</ParamField>
+
+<ParamField query="season" type="string" default="1">
+  Season number. Only used when `type=tv`.
+</ParamField>
+
+<ParamField query="episode" type="string" default="1">
+  Episode number. Only used when `type=tv`.
+</ParamField>
+
+<ParamField query="provider" type="string">
+  The scraper plugin ID to use (e.g. `"rei"`). The provider must be present in the configured server allow-list. If it is not, the request falls back to the configured `DEFAULT_SERVER`. When omitted, the default server is used directly.
+</ParamField>
+
+## Response
+
+**Content-Type:** `application/json`
+
+On success the endpoint returns a `StreamResult` object:
+
+<ResponseField name="url" type="string">
+  The playable stream URL, proxied through `/api/proxy?data=...`. Pass this directly to an HLS player such as hls.js or Video.js.
+</ResponseField>
+
+<ResponseField name="isDirect" type="boolean">
+  Whether the URL is a direct stream (as opposed to an embed or intermediate page). nano's `.rink` plugins always resolve to direct URLs, so this is typically `true`.
+</ResponseField>
+
+<ResponseField name="isM3U8" type="boolean">
+  Whether the URL is an HLS playlist (`.m3u8`). Use this to decide whether to initialise an HLS.js player instead of a plain `<video>` element.
+</ResponseField>
+
+<ResponseField name="subtitles" type="array">
+  Array of subtitle track objects, merged from the plugin and from `sub.vdrk.site`.
+
+  <Expandable title="Subtitle object fields">
+    <ResponseField name="src" type="string">
+      URL for the subtitle file. `.srt` files are automatically proxied through `/api/proxy?url=...` for on-the-fly SRT→VTT conversion.
+    </ResponseField>
+    <ResponseField name="label" type="string">
+      Human-readable track label (e.g. `"English"`, `"Spanish"`).
+    </ResponseField>
+    <ResponseField name="language" type="string">
+      BCP-47 language code derived from the label (e.g. `"en"`, `"es"`, `"fr"`).
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="qualities" type="array">
+  Optional array of quality variants. Only present when the plugin returns multiple quality options.
+
+  <Expandable title="Quality object fields">
+    <ResponseField name="label" type="string">
+      Quality label (e.g. `"1080p"`, `"720p"`, `"480p"`).
+    </ResponseField>
+    <ResponseField name="url" type="string">
+      Proxied stream URL for this quality level.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Subtitle Fetching
+
+After a stream URL is successfully resolved, `/api/scrape` automatically fetches additional subtitles from `sub.vdrk.site`:
+
+- **Movies:** `https://sub.vdrk.site/v1/movie/{id}`
+- **TV episodes:** `https://sub.vdrk.site/v1/tv/{id}/{season}/{episode}`
+
+The request has a 4-second timeout. Any subtitles returned are appended to those already provided by the plugin. Subtitle language codes are inferred from the track label (e.g. a label containing `"english"` maps to `"en"`). SRT subtitle URLs are routed through `/api/proxy` so the browser receives them as WebVTT.
+
+## Adult Content Blocking
+
+Before returning a stream URL, `/api/scrape` checks TMDB for the `adult` flag on the resolved title. If `adult: true`, the endpoint returns HTTP `403`:
+
+```json
+{
+  "error": "Adult content blocked",
+  "url": null,
+  "blocked": true
+}
+```
+
+## No Stream Found
+
+If the plugin returns no URL, or if the URL fails nano's stream safety check, the endpoint returns HTTP `200` with an error payload:
+
+```json
+{
+  "error": "No stream found",
+  "url": null,
+  "blockedStream": false,
+  "debug": {
+    "pluginsLoaded": ["rei"]
+  }
+}
+```
+
+If a URL was resolved but blocked by the safety check, `error` will be `"Blocked stream"` and `blockedStream` will be `true`.
+
+## Examples
+
+```bash
+# Resolve a stream for Inception (movie)
+curl "http://localhost:3000/api/scrape?id=27205&type=movie&provider=rei"
+
+# Resolve a stream for Breaking Bad S1E1 (TV)
+curl "http://localhost:3000/api/scrape?id=1396&type=tv&season=1&episode=1&provider=rei"
+```
+
+**Example success response:**
+
+```json
+{
+  "url": "/api/proxy?data=eyJ1cmwiOiJodHRwczovL2V4YW1wbGUuY29tL3N0cmVhbS5tM3U4IiwiaGVhZGVycyI6e319",
+  "isDirect": true,
+  "isM3U8": true,
+  "subtitles": [
+    {
+      "src": "/api/proxy?url=https%3A%2F%2Fsub.vdrk.site%2Fsubs%2Fen.srt",
+      "label": "English",
+      "language": "en"
+    }
+  ],
+  "qualities": [
+    { "label": "1080p", "url": "/api/proxy?data=eyJ1cmwiOiJodHRwczovL2V4YW1wbGUuY29tLzEwODBwLm0zdTgifQ==" },
+    { "label": "720p",  "url": "/api/proxy?data=eyJ1cmwiOiJodHRwczovL2V4YW1wbGUuY29tLzcyMHAubTN1OCJ9" }
+  ]
+}
+```
+
+<Note>
+  The `url` field in a successful response is always a `/api/proxy?data=...` URL, never the raw stream origin. The `data` parameter is a base64-encoded JSON object containing the real URL and any required request headers. This ensures CORS is handled transparently for the browser.
+</Note>

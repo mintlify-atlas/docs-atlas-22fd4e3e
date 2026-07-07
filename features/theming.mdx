@@ -1,0 +1,154 @@
+---
+title: "Customize nano's appearance with theming options"
+sidebarTitle: "Theming"
+description: "nano supports dark and light modes, animated background shaders, accent hue control, custom fonts, and monochrome palette — all via environment variables."
+---
+
+nano's entire visual presentation is configurable through environment variables at runtime — no CSS editing or rebuilding required. Colors, backgrounds, fonts, greeting styles, and header controls are all driven by values read from the environment at startup and injected into the client via `window.__SHIOPA_CONFIG__`.
+
+<Tip>
+  Theme mode and accent hue can be changed **live in the browser** without a server restart. The header color picker and theme toggle save preferences to `localStorage` and apply them immediately, overriding the server-side defaults.
+</Tip>
+
+## Color scheme
+
+### Theme mode
+
+```bash
+THEME_MODE=dark    # default — dark background, light text
+THEME_MODE=light   # light background, dark text
+```
+
+### Palette
+
+```bash
+THEME_PALETTE=color       # default — full color accent system
+THEME_PALETTE=monochrome  # black and white only, no accent hues
+```
+
+In `monochrome` mode, the accent color is `#ffffff` in dark mode and `#000000` in light mode, and all hue-based CSS variables are overridden.
+
+### Accent hue
+
+```bash
+THEME_HUE=200   # default — light blue
+```
+
+`THEME_HUE` accepts any integer from 0 to 360 and sets the CSS variable `--theme-hue`. The accent color is computed as `hsl(var(--theme-hue), 75%, 70%)` in dark mode and `hsl(var(--theme-hue), 70%, 58%)` in light mode.
+
+Some useful reference points:
+
+| Value | Color |
+|-------|-------|
+| `0` | Red |
+| `60` | Yellow |
+| `120` | Green |
+| `180` | Cyan |
+| `200` | Light blue (default) |
+| `270` | Purple |
+| `310` | Pink |
+
+### Background colors
+
+Override the base background color for each mode:
+
+```bash
+COLOR_BG_DARK=#000000    # default dark background
+COLOR_BG_LIGHT=#ffffff   # default light background
+```
+
+These values are injected as CSS custom properties `--bg-color-config-dark` and `--bg-color-config-light` and used as the base for all card, dropdown, and surface color calculations.
+
+## Background styles
+
+The `THEME_BG_STYLE` variable controls the decorative background pattern layered over the base color.
+
+```bash
+THEME_BG_STYLE=neon-dither   # default
+```
+
+| Value | Description |
+|-------|-------------|
+| `falling` | Animated falling dither dots shader |
+| `neon-dither` | Animated wave dither shader (default) |
+| `dots` | Static radial-gradient dot grid |
+| `lines` | Static crosshatch line grid (40px) |
+| `thin-lines` | Static thin crosshatch line grid (30px) |
+| `text` | Repeating "shiopa" text watermark pattern |
+| `grain` | Subtle SVG fractal noise grain |
+| `none` | Solid background color only, no pattern |
+
+Both `falling` and `neon-dither` are WebGL-based animated shaders rendered on a `<canvas>` element fixed behind the page content.
+
+### Custom background
+
+```bash
+THEME_CUSTOM_BG=https://example.com/my-background.jpg
+```
+
+When set, `THEME_CUSTOM_BG` overrides the pattern background with any image URL or CSS background value. The pattern style (`THEME_BG_STYLE`) is ignored when a custom background is provided.
+
+## Typography
+
+```bash
+# Font for the entire UI (any valid CSS font-family string)
+THEME_FONT_FAMILY="Inter, sans-serif"
+
+# Separate font for the site logo / name display
+LOGO_FONT_FAMILY="Pencerio-Hairline, cursive"
+
+# Enable the mixed decorative font in the logo (default true)
+USE_MIXED_FANCY_FONT=true
+```
+
+nano bundles three decorative fonts for logo use: **Array-Bold**, **Telma-Bold**, and **Pencerio-Hairline**. When `USE_MIXED_FANCY_FONT=true`, the logo renderer applies these fonts to alternating word segments for a mixed typographic effect. Set it to `false` for a uniform, single-font logo.
+
+For Arabic (`lang="ar"`), nano automatically switches the UI font to `Cairo` and display titles to `Amiri` serif, ignoring the custom `THEME_FONT_FAMILY` value.
+
+## Greeting styles
+
+The home page greeting area above the search bar is controlled by `GREETING_STYLE`:
+
+```bash
+GREETING_STYLE=nano-pet   # default
+SHOW_GREETING=true        # set to false to hide the greeting entirely
+```
+
+| Value | Description |
+|-------|-------------|
+| `nano-pet` | Animated mesh companion with speech bubble (default) |
+| `slogans` | Rotating time-of-day greeting text |
+| `logo` | Site logo mark |
+| `icon` | React-icon specified by `CUSTOM_ICON` |
+| `gif` | Custom GIF image from `CUSTOM_GIF` |
+| `logo-and-icon` | Icon next to the site name |
+
+**Custom icon and GIF options:**
+
+```bash
+CUSTOM_ICON=tv          # Any react-icons icon name (used when GREETING_STYLE=icon)
+CUSTOM_GIF=https://...  # GIF URL (used when GREETING_STYLE=gif)
+CUSTOM_GIF_WIDTH=200px
+CUSTOM_GIF_HEIGHT=200px
+CUSTOM_GIF_MARGIN=0 0 16px
+```
+
+## Logo size
+
+```bash
+LOGO_SIZE=lg   # default
+```
+
+Controls the rendered size of the home page title. Accepted values: `sm`, `md`, `lg` (default), `xl`.
+
+## Header controls
+
+Three toggles control which interactive controls appear in the header:
+
+```bash
+HEADER_SHOW_THEME_TOGGLE=true    # dark/light mode pill switch
+HEADER_SHOW_COLOR_PICKER=true    # hue slider for accent color
+HEADER_SHOW_LANG_SELECTOR=true   # language dropdown
+```
+
+All three default to `true`. Set any to `false` to remove the corresponding control from the header — useful for locked-down deployments where you don't want users changing the appearance or language.

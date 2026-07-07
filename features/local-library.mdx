@@ -1,0 +1,143 @@
+---
+title: "Manage a local media library in nano"
+sidebarTitle: "Local Library"
+description: "nano's local library feature lets you catalog and play local video files from your browser using the File System Access API and IndexedDB for persistence."
+---
+
+nano's local library is a browser-based media catalog that lets you organise and play video files stored on your own machine. It uses the browser's [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API) to read files directly from a local directory, and IndexedDB to persist the directory handle and media catalog across page reloads — no file upload or server-side storage required.
+
+<Warning>
+  The local library feature requires a Node.js runtime. It is **not supported** on Cloudflare Workers or Vercel serverless deployments, because those environments do not have access to the local filesystem for streaming.
+</Warning>
+
+## Enabling the local library
+
+Two environment variables control local library availability:
+
+```bash
+# Show the local library UI in the navigation
+ENABLE_LOCAL_LIBRARY=true
+
+# Allow users to add, edit, and delete library entries via /admin
+ENABLE_LOCAL_LIBRARY_EDITING=true
+```
+
+Setting `ENABLE_LOCAL_LIBRARY=true` makes the library visible in the app. Setting `ENABLE_LOCAL_LIBRARY_EDITING=true` additionally enables the admin panel at `/admin` where you can manage catalog entries through a GUI.
+
+<Note>
+  The admin UI at `/admin` provides a full graphical interface for managing library entries — adding movies and TV series, setting poster images, configuring episode paths, and attaching subtitles — whenever `ENABLE_LOCAL_LIBRARY_EDITING=true`.
+</Note>
+
+## How it works
+
+<Steps>
+  <Step title="Grant directory access">
+    When a user visits the local library section, nano prompts the browser to request access to a local directory using `window.showDirectoryPicker()`. The browser shows a native folder selection dialog. Once the user grants access, the `FileSystemDirectoryHandle` is stored in IndexedDB under the key `dir-handle` so permission only needs to be granted once per session.
+  </Step>
+  <Step title="Load the media catalog">
+    nano reads a `rink.json` file from the root of the selected directory. This JSON file is the media catalog — an array of `LocalMediaItem` objects describing your movies and TV series.
+
+    ```typescript
+    interface LocalSubtitle {
+      file: string;     // relative path to the subtitle file
+      label: string;    // display name (e.g. "English")
+      language: string; // BCP-47 language code (e.g. "en")
+    }
+
+    interface LocalMediaItem {
+      id: string;
+      type: "movie" | "tv";
+      title: string;
+      poster?: string;
+      file?: string;                               // relative path for movies
+      seasons?: Record<string, Record<string, string>>; // seasons → episodes → paths
+      subtitles?: LocalSubtitle[];
+    }
+    ```
+
+    The `loadRinkJson` function reads and parses this file; if `rink.json` does not exist or cannot be parsed, the library returns an empty array.
+  </Step>
+  <Step title="Play a file">
+    When a user selects a movie or episode, nano resolves the relative path from the `LocalMediaItem` against the directory handle, obtains a `File` object via the File System Access API, and creates an object URL (`URL.createObjectURL`) to pass to the video player. The file is streamed directly from the local filesystem — no data is sent to the server.
+  </Step>
+</Steps>
+
+## rink.json format
+
+The `rink.json` file lives in the root of the directory you select and describes your entire media catalog. Here are examples for a movie and a TV series:
+
+<CodeGroup>
+```json Movie entry
+[
+  {
+    "id": "movie-tt0111161",
+    "type": "movie",
+    "title": "The Shawshank Redemption",
+    "poster": "posters/shawshank.jpg",
+    "file": "movies/shawshank.mp4",
+    "subtitles": [
+      {
+        "file": "subs/shawshank_en.srt",
+        "label": "English",
+        "language": "en"
+      }
+    ]
+  }
+]
+```
+
+```json TV series entry
+[
+  {
+    "id": "tv-tt0903747",
+    "type": "tv",
+    "title": "Breaking Bad",
+    "poster": "posters/breaking-bad.jpg",
+    "seasons": {
+      "1": {
+        "1": "breaking-bad/s01e01.mp4",
+        "2": "breaking-bad/s01e02.mp4"
+      },
+      "2": {
+        "1": "breaking-bad/s02e01.mp4"
+      }
+    },
+    "subtitles": [
+      {
+        "file": "subs/bb_en.vtt",
+        "label": "English",
+        "language": "en"
+      }
+    ]
+  }
+]
+```
+</CodeGroup>
+
+All file paths are **relative to the selected directory root**. Subdirectories are supported — nano traverses the path by splitting on `/` or `\` and calling `getDirectoryHandle` for each segment before calling `getFileHandle` on the final filename.
+
+## Subtitles
+
+The local library supports both `.vtt` (WebVTT) and `.srt` (SubRip) subtitle files. SRT files are converted to WebVTT automatically in the browser — no server-side processing is needed:
+
+```typescript
+// From src/lib/nano/local-library.ts
+export function srtToVtt(srtText: string): string {
+  let vtt = srtText.replace(/(\d\d:\d\d:\d\d),(\d\d\d)/g, "$1.$2");
+  return "WEBVTT\n\n" + vtt;
+}
+```
+
+When a file ending in `.srt` is resolved, nano reads its text content, runs `srtToVtt`, creates a Blob with MIME type `text/vtt`, and returns a blob object URL. The player receives a standard `.vtt` URL regardless of the source format.
+
+## Persistence
+
+nano uses IndexedDB (database name `shiopa-local-db`, version 2) with three object stores:
+
+| Store | Purpose |
+|-------|---------|
+| `handles` | Stores the `FileSystemDirectoryHandle` under key `dir-handle` |
+| `media-items` | Stores the parsed `LocalMediaItem[]` array under key `items` |
+| `media-files` | Stores `File` objects keyed by relative path (for uploaded files) |
+
+On page load, nano attempts to restore the directory handle from `handles`. If a stored handle exists, it calls `queryPermission` / `requestPermission` to verify the user still grants access before reading `rink.json`. If IndexedDB is unavailable, the library falls back to `localStorage` under the key `shiopa-local-items` for the media item list.

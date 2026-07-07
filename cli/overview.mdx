@@ -1,0 +1,120 @@
+---
+title: "shiopa CLI: manage your nano installation"
+sidebarTitle: "Overview"
+description: "The shiopa CLI lets you clone, configure, and manage a nano installation from the terminal. Install sources, update the app, and edit settings without touching code."
+---
+
+The `shiopa` CLI is the official command-line companion for nano. It handles everything from cloning the repository to configuring your site, installing encrypted stream sources (`.rink` files), and keeping your installation up to date — all without requiring you to touch any source code directly.
+
+## Installation
+
+The CLI ships as the `shiopa` binary inside the `shiopa-nano` npm package. You can install it globally, run it one-off with `npx`, or invoke it through `pnpm` after cloning the repo.
+
+<CodeGroup>
+```bash Global install (recommended)
+npm install -g shiopa-nano
+```
+
+```bash One-off with npx
+npx shiopa <command>
+```
+
+```bash Inside the cloned repo
+pnpm shiopa <command>
+```
+</CodeGroup>
+
+<Note>
+  The `shiopa` binary is defined in `package.json` under `bin.shiopa`, pointing to `./scripts/shiopa.mjs`. When you install `shiopa-nano` globally, `shiopa` becomes available everywhere in your terminal.
+</Note>
+
+## How it works
+
+Under the hood, `shiopa` is a pure Node.js ESM script (`scripts/shiopa.mjs`) with no external runtime dependencies beyond what ships with Node. It performs three main categories of work:
+
+- **Catalog management** — reads and writes `.rink` scraper plugin files from `src/shade/catalog/` (the encrypted source catalog) and copies them into `src/shade/private/` (your active sources)
+- **Configuration** — reads and writes your `.env` file through an interactive prompt, and can also patch `config.shiopa.ts` to register new video servers
+- **Project lifecycle** — wraps `git` and `pnpm` to clone the repo, pull updates, and install dependencies
+
+Source names are matched case-insensitively with `-`/`_` normalization, so `rink-d14`, `rink_d14`, and `RINK-D14` all resolve to the same catalog entry.
+
+## Typical workflow
+
+Follow these steps to go from nothing to a running nano instance.
+
+<Steps>
+  <Step title="Clone the nano repository">
+    Run `shiopa clone` from any directory. This clones `https://github.com/mohameodo/nano.git` into a new `shiopa-nano` folder, copies `.env.example` to `.env`, and runs `pnpm install` automatically.
+
+    ```bash
+    shiopa clone
+    ```
+
+    You can also pass a custom folder name:
+
+    ```bash
+    shiopa clone my-streaming-site
+    ```
+  </Step>
+
+  <Step title="Enter the project directory">
+    ```bash
+    cd shiopa-nano
+    ```
+  </Step>
+
+  <Step title="Configure your site">
+    Run the interactive config prompt to set your site name, theme, default video server, and more. All answers are written to `.env`.
+
+    ```bash
+    shiopa config
+    ```
+
+    Prefer editing files directly? Use `--open` to open `config.shiopa.ts` and `.env` in your editor:
+
+    ```bash
+    shiopa config --open
+    ```
+  </Step>
+
+  <Step title="Install stream sources">
+    Add a single source by name, or install every bundled source at once with `--all`.
+
+    ```bash
+    # Install a specific source
+    shiopa add rei
+
+    # Install all bundled sources
+    shiopa add --all
+    ```
+  </Step>
+
+  <Step title="Start the development server">
+    ```bash
+    pnpm dev
+    ```
+  </Step>
+</Steps>
+
+## Quick reference
+
+<CardGroup cols={2}>
+  <Card title="shiopa clone" icon="code-branch">
+    Clone the nano repo to a local directory and bootstrap your project with a single command.
+  </Card>
+  <Card title="shiopa config" icon="sliders">
+    Run an interactive prompt to set site name, theme, video server, auth, and other `.env` settings.
+  </Card>
+  <Card title="shiopa add" icon="circle-plus">
+    Install one or all encrypted `.rink` stream source plugins into your project.
+  </Card>
+  <Card title="shiopa list" icon="list">
+    List every source available in the catalog, with friendly display names.
+  </Card>
+  <Card title="shiopa update" icon="arrows-rotate">
+    Pull the latest code from `origin/main` and reinstall dependencies.
+  </Card>
+  <Card title="shiopa version" icon="tag">
+    Print the CLI version and the version of the project in the current directory.
+  </Card>
+</CardGroup>

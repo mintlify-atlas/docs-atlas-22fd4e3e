@@ -1,0 +1,328 @@
+---
+title: "shiopa CLI command reference"
+sidebarTitle: "Commands"
+description: "Complete reference for all shiopa CLI commands: clone, config, add, list, update, and version. Includes flags, arguments, and usage examples."
+---
+
+This page documents every command exposed by the `shiopa` CLI (`scripts/shiopa.mjs`). Commands that require a nano project directory will exit with an error if you run them outside one — `shiopa` detects the project root by walking up from your current directory looking for `src/shade/` or `src/components/shiopa/config.shiopa.ts`.
+
+---
+
+## `shiopa clone`
+
+Clones the nano repository from GitHub into a new local directory, bootstraps the environment file, and installs dependencies — all in one step.
+
+```bash
+shiopa clone [folder]
+```
+
+**Arguments**
+
+| Argument | Default | Description |
+|---|---|---|
+| `folder` | `shiopa-nano` | Target directory name (relative to your current working directory) |
+
+**What it does**
+
+1. Runs `git clone https://github.com/mohameodo/nano.git <folder>`
+2. Copies `.env.example` → `.env` (if `.env` doesn't already exist)
+3. Runs `pnpm install` inside the cloned folder
+
+<Warning>
+  `shiopa clone` will exit immediately if the target directory already exists. Choose a different folder name or delete the existing directory first.
+</Warning>
+
+**Examples**
+
+```bash
+# Clone into ./shiopa-nano (default)
+shiopa clone
+
+# Clone into a custom directory
+shiopa clone my-streaming-site
+```
+
+After a successful clone the CLI prints the next suggested steps:
+
+```
+Done.
+  cd shiopa-nano
+  shiopa config
+  shiopa add rink-d01
+  pnpm dev
+```
+
+---
+
+## `shiopa config`
+
+Launches an interactive terminal prompt that writes your site settings to `.env`. If `.env` does not yet exist, it is created from `.env.example` automatically before the prompt starts.
+
+```bash
+shiopa config [--open]
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--open` | Skip the interactive prompt and open `config.shiopa.ts` and `.env` directly in your editor |
+
+<Note>
+  `--open` uses the `$EDITOR` or `$VISUAL` environment variable. If neither is set, it falls back to VS Code (`code`) when detected, `notepad` on Windows, or `nano` on Unix.
+</Note>
+
+### Interactive prompt fields
+
+Each prompt displays the current value (or the default from `.env.example`) in brackets. Press **Enter** to keep the existing value.
+
+| Prompt | `.env` key | Default | Accepted values |
+|---|---|---|---|
+| Site name | `SITE_NAME` | `shiopa` | Any string |
+| Page title | `METADATA_TITLE` | `shiopa nano` | Any string |
+| Description | `METADATA_DESCRIPTION` | *(see below)* | Any string |
+| Default video server | `DEFAULT_SERVER` | `nemu` | Any installed source ID |
+| Theme mode | `THEME_MODE` | `dark` | `dark` / `light` |
+| Theme palette | `THEME_PALETTE` | `color` | `monochrome` / `color` |
+| Theme hue | `THEME_HUE` | `200` | Integer `0`–`360` |
+| Background style | `THEME_BG_STYLE` | `neon-dither` | `falling` / `neon-dither` / `none` |
+| Greeting style | `GREETING_STYLE` | `nano-pet` | `nano-pet` / `slogans` / `logo` |
+| Enable auth | `ENABLE_AUTH` | `false` | `true` / `false` |
+| Autoplay | `AUTOPLAY` | `true` | `true` / `false` |
+| Show watermarks | `SHOW_WATERMARKS` | `false` | `true` / `false` |
+| Show trending | `SHOW_TRENDING` | `false` | `true` / `false` |
+
+The default description is:
+> `a minimalist web interface for shiopa. search for movies and tv shows instantly without bloat.`
+
+**Examples**
+
+```bash
+# Run the interactive config wizard
+shiopa config
+
+# Open config files in your editor instead
+shiopa config --open
+```
+
+After the prompt completes:
+
+```
+Config saved to .env
+Run: pnpm dev
+```
+
+---
+
+## `shiopa add`
+
+Copies a `.rink` scraper plugin from the local catalog (`src/shade/catalog/`) into your active sources directory (`src/shade/private/`). It also registers the server `id` and display `name` in `config.shiopa.ts` so the player knows the source exists.
+
+```bash
+shiopa add <source>
+shiopa add --all [--quiet]
+```
+
+**Arguments & flags**
+
+| Argument / Flag | Description |
+|---|---|
+| `<source>` | The catalog source ID to install (case-insensitive, `-`/`_` normalized) |
+| `--all` | Install every source in the catalog at once |
+| `--quiet` | Suppress all output (useful in scripts) |
+
+### Installing a single source
+
+Source names are matched case-insensitively. Hyphens and underscores are interchangeable, so `rei`, `REI`, and `rei` all resolve to the same plugin.
+
+If the source is not found in the local catalog, `shiopa add` automatically fetches the catalog from the npm registry before retrying.
+
+```bash
+shiopa add rei
+```
+
+Example output:
+
+```
+Installed rei -> src/shade/private/rei.rink
+Added rei to config.shiopa.ts
+```
+
+### Installing all sources at once
+
+The `--all` flag installs every `.rink` file present in the catalog. If fewer than 5 rinks are found locally, the full catalog is downloaded from the npm registry first.
+
+```bash
+shiopa add --all
+```
+
+```bash
+# Silent install — no output
+shiopa add --all --quiet
+```
+
+### Available sources
+
+The following source IDs are defined in `rink-aliases.mjs`:
+
+| ID | Display name | Public |
+|---|---|---|
+| `haru` | Haru | |
+| `sora` | Sora | |
+| `kisskh` | KissKH | |
+| `yuki` | Yuki | |
+| `aoi` | Aoi | |
+| `nemu` | Nemu | |
+| `ren` | Ren | |
+| `nagi` | Nagi | |
+| `kaede` | Kaede | |
+| `rei` | Rei | ✓ |
+| `hina` | Hina | |
+| `riku` | Riku | |
+| `kaze` | Kaze | |
+| `noa` | Noa | |
+| `akari` | Akari | |
+| `yume` | Yume | |
+| `hana` | Hana | |
+| `momo` | Momo | |
+| `xpass` | XPass | |
+
+<Tip>
+  Run `shiopa list` at any time to see which sources are available in your current catalog, with their display names.
+</Tip>
+
+---
+
+## `shiopa list`
+
+Prints every source ID available in the local catalog, along with the friendly display name where one is defined.
+
+```bash
+shiopa list
+```
+
+If fewer than 5 `.rink` files are found in `src/shade/catalog/`, the CLI silently downloads the full catalog from the npm registry before listing.
+
+**Example output**
+
+```
+akari (Akari)
+aoi (Aoi)
+hana (Hana)
+haru (Haru)
+hina (Hina)
+kaede (Kaede)
+kaze (Kaze)
+kisskh (KissKH)
+momo (Momo)
+nagi (Nagi)
+nemu (Nemu)
+noa (Noa)
+rei (Rei)
+ren (Ren)
+riku (Riku)
+sora (Sora)
+xpass (XPass)
+yuki (Yuki)
+yume (Yume)
+```
+
+<Note>
+  `shiopa list` can be run from outside a project directory. When no project root is detected it reads the catalog bundled with the globally-installed package.
+</Note>
+
+---
+
+## `shiopa update`
+
+Pulls the latest code from `origin/main` and reinstalls dependencies. Must be run from inside a git-cloned nano project directory.
+
+```bash
+shiopa update
+```
+
+**What it does**
+
+1. Verifies that a `.git` directory is present (exits with an error if not)
+2. Reads the current `package.json` version and prints it
+3. Runs `git fetch origin`
+4. Runs `git reset --hard origin/main`
+5. Runs `pnpm install`
+6. Prints the new version from `package.json`
+
+<Warning>
+  `git reset --hard origin/main` discards any uncommitted local changes to tracked files. Make sure you have committed or backed up any local modifications before running `shiopa update`.
+</Warning>
+
+**Example**
+
+```bash
+shiopa update
+```
+
+```
+Updating shiopa nano (current v2.0.11)...
+Update complete. Project version: v2.0.12
+CLI version: v2.0.12
+```
+
+---
+
+## `shiopa version`
+
+Prints the version of the `shiopa` CLI and, if run inside a project directory, the version of that project.
+
+```bash
+shiopa version
+```
+
+**Aliases**: `-v`, `--version`
+
+**Example output**
+
+```
+shiopa cli v2.0.12
+project v2.0.12
+```
+
+<Note>
+  The project version line only appears when `shiopa version` is run from inside a nano project directory (one that contains `src/shade/` or `src/components/shiopa/config.shiopa.ts`).
+</Note>
+
+---
+
+## `shiopa help`
+
+Prints the full help text listing all available commands and a short usage example.
+
+```bash
+shiopa help
+```
+
+**Aliases**: `--help`, `-h`, or just `shiopa` with no arguments.
+
+**Output**
+
+```
+shiopa v2.0.12
+
+Usage:
+  shiopa clone [folder]     Clone shiopa nano from GitHub
+  shiopa update             Pull latest and reinstall deps
+  shiopa version            Show CLI and project version
+  shiopa config             Edit site settings
+  shiopa config --open      Open config files in your editor
+  shiopa add <source>       Install an encrypted source
+  shiopa add --all          Install every bundled source
+  shiopa list               List available catalog sources
+  shiopa help               Show this help
+
+Examples:
+  cd ~/Desktop
+  shiopa clone
+  cd shiopa-nano
+  shiopa config
+  shiopa add rink-d01
+  shiopa update
+  pnpm dev
+```

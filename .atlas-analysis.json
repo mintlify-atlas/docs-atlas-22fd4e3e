@@ -1,0 +1,110 @@
+{
+  "projectType": "saas",
+  "projectName": "nano",
+  "projectDescription": "A self-hostable, minimalist web interface for streaming movies and TV shows built with Astro, featuring instant search, a plugin-based scraper system, a built-in video player, and deep deployment support for Docker, Vercel, Railway, Render, and Cloudflare.",
+  "theme": "willow",
+  "primaryColor": "#6366f1",
+  "lightColor": "#a5b4fc",
+  "darkColor": "#1e1b4b",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "configuration"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/vercel",
+              "deployment/railway",
+              "deployment/cloudflare"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/video-player",
+              "features/local-library",
+              "features/authentication",
+              "features/theming",
+              "features/internationalization"
+            ]
+          },
+          {
+            "group": "CLI",
+            "pages": [
+              "cli/overview",
+              "cli/commands"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/overview",
+              "api/search",
+              "api/details",
+              "api/scrape",
+              "api/proxy",
+              "api/stream"
+            ]
+          },
+          {
+            "group": "Plugins",
+            "pages": [
+              "api/plugins",
+              "api/rink-format"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Instant movie and TV show search via TMDB with built-in fallback",
+    "Plugin-based scraper system using encrypted .rink files",
+    "Custom HTML5 and Vidstack video player with HLS/M3U8 support",
+    "Range-request proxy for streaming with M3U8 rewriting",
+    "16-language i18n support",
+    "Fully configurable via environment variables at runtime",
+    "Docker, Vercel, Railway, Render, and Cloudflare Workers deployment",
+    "Optional PostgreSQL or JSON-file database",
+    "Optional authentication with local login",
+    "Local media library support via File System Access API",
+    "Animated background shaders (falling dither, neon dither)",
+    "shiopa CLI for cloning, configuring, and managing scraper sources",
+    "Dark/light theme with accent hue picker"
+  ],
+  "publicApiSurface": [
+    "GET /api/search?q=&page=&lang=",
+    "GET /api/details?id=&type=&season=",
+    "GET /api/scrape?id=&type=&season=&episode=&provider=",
+    "GET /api/proxy?url=&referer=&origin= / ?data=<base64>",
+    "GET /api/stream?path=&base=",
+    "GET /api/trending",
+    "GET /api/auth (POST)",
+    "GET /api/library",
+    "resolveStream(providerId, id, type, season?, episode?): Promise<StreamResult>",
+    "getPlugins(): ScraperPlugin[]",
+    "ScraperPlugin interface: { key, name, enabled, rank, isDirect, fetchStream }",
+    "ShiopaConfig interface (config.shiopa.ts)",
+    "shiopa clone [folder]",
+    "shiopa config [--open]",
+    "shiopa add <source> | --all",
+    "shiopa list",
+    "shiopa update",
+    "shiopa version"
+  ]
+}

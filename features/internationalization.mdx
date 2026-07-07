@@ -1,0 +1,123 @@
+---
+title: "nano supports 16 UI languages out of the box"
+sidebarTitle: "Internationalization"
+description: "nano ships full UI translations for 16 languages. Set a default locale with DEFAULT_LOCALE and let users switch languages via the header language selector."
+---
+
+nano ships with complete UI translations for 16 languages. Every user-facing string — search placeholders, greetings, buttons, error messages, auth labels, admin panel copy, and video player controls — is served in the user's selected language. The active locale also controls the language in which TMDB returns movie and TV show metadata (titles, overviews, and cast information).
+
+## Supported languages
+
+The `TRANSLATIONS` object in `src/components/shiopa/locales/translations.ts` defines every supported locale. The following 16 language codes are available out of the box:
+
+| Code | Language |
+|------|----------|
+| `en` | English |
+| `es` | Spanish |
+| `ko` | Korean |
+| `ar` | Arabic (RTL) |
+| `ja` | Japanese |
+| `zh` | Chinese (Simplified) |
+| `de` | German |
+| `ru` | Russian |
+| `hi` | Hindi |
+| `th` | Thai |
+| `pl` | Polish |
+| `tl` | Filipino (Tagalog) |
+| `vi` | Vietnamese |
+| `nl` | Dutch |
+| `tr` | Turkish |
+| `genz` | Gen Z (English variant) |
+
+Arabic (`ar`) is the only right-to-left locale. nano detects this and sets `dir="rtl"` on the `<html>` element, mirroring the speech bubble, navigation layout, and text alignment automatically.
+
+## Setting the default language
+
+```bash
+DEFAULT_LOCALE=en   # default
+```
+
+`DEFAULT_LOCALE` sets the locale used for server-side rendering and for users who have not yet made a language selection. Any of the 16 locale codes listed above is a valid value.
+
+The resolved locale is determined in this order:
+
+1. The `shiopa-locale` cookie (set when the user picks a language in the browser)
+2. The `DEFAULT_LOCALE` environment variable
+3. Falls back to `en` if neither is set
+
+## Runtime language switching
+
+Users can switch languages live via the language selector dropdown in the header. The selector is visible by default and can be hidden with:
+
+```bash
+HEADER_SHOW_LANG_SELECTOR=false
+```
+
+When a user selects a language, nano sets the `shiopa-locale` cookie and re-renders the page in the new locale without requiring a server restart or deployment change.
+
+## What is translated
+
+All UI strings are covered by the translation system, including:
+
+- **Navigation & search** — search placeholder, filter tabs (All, Movies, TV Shows), results count
+- **Home greeting** — time-of-day greetings (`greetMorning`, `greetAfternoon`, `greetEvening`) and rotating slogans
+- **Authentication** — login/sign-up form labels, error messages, button text
+- **Video player** — server selector labels, episode panel title
+- **Admin / local library** — all labels in the `/admin` panel for managing local media items
+- **Error states** — `noResults`, `connectionError`, `somethingWentWrong`
+- **nano-pet speech bubbles** — idle sayings, reaction text when clicked, and horror-mode reactions
+
+<Note>
+  Content fetched from TMDB — movie titles, overviews, taglines, and cast biographies — is served in the language passed as the `lang` query parameter in `/api/search` and `/api/details` requests. The UI sets this parameter automatically to match the currently selected locale, so search results and detail pages are localised alongside the interface.
+</Note>
+
+## Translation keys
+
+The following is a representative selection of translation keys from the `TRANSLATIONS` object. These cover the major areas of the UI and give a sense of the full translation coverage:
+
+```typescript
+// Greeting & home
+greetMorning    // "good morning"
+greetAfternoon  // "good afternoon"
+greetEvening    // "good evening"
+slogan1         // "discover movies & tv shows"
+slogan2         // "your minimalist cinema"
+homeDesc        // site tagline shown in the footer
+
+// Search
+placeholder     // search input placeholder text
+search          // search button label
+searching       // loading state during search
+noResults       // "No results found for "{query}""
+
+// Authentication
+authTitle       // page / dialog title
+username        // username field label
+password        // password field label
+login           // login button
+signUp          // sign-up button
+createAccount   // toggle to sign-up mode
+backToLogin     // toggle back to login mode
+logout          // logout button
+connectionError // network error message
+somethingWentWrong // generic error message
+
+// Local library admin
+adminTitle      // admin panel heading
+addNewItem      // add button
+edit            // edit button
+delete          // delete button
+save            // save button
+cancel          // cancel button
+subtitles       // subtitles section label
+episodes        // episodes section label
+downloadRink    // download rink.json button label
+
+// nano-pet companion
+petSay1         // idle speech bubble message 1
+petSay2         // idle speech bubble message 2
+petMad1         // reaction when clicked repeatedly
+petHorror1      // reaction when a horror title is searched
+```
+
+Each of these keys is present for all 16 locales. New locales can be added by extending the `TRANSLATIONS` record with a new language code key and providing values for every key in the `en` entry.

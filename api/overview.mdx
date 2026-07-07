@@ -1,0 +1,62 @@
+---
+title: "nano REST API: built-in endpoints for search and streaming"
+sidebarTitle: "Overview"
+description: "nano exposes a set of server-side REST API endpoints for search, metadata, stream resolution, proxying, and local file streaming. All endpoints use GET requests."
+---
+
+nano ships with a set of built-in REST API endpoints that power everything from the search bar to HLS stream playback. These endpoints run server-side as part of the Astro SSR application — no separate API server is needed. You can call them directly from any HTTP client or use them to integrate nano's capabilities into your own frontend.
+
+## Base URL
+
+All endpoints are relative to your nano instance's base URL. For a local development server this is typically:
+
+```
+http://localhost:3000
+```
+
+In production, replace this with your deployed domain (e.g. `https://nano.example.com`).
+
+## HTTP Methods
+
+All data endpoints use `GET` requests. The only exception is `/api/auth`, which uses `POST` for login, signup, and logout actions.
+
+## Authentication
+
+Most endpoints require no authentication. If you have set `ENABLE_AUTH=true` in your environment, nano gates the entire application behind a login wall — unauthenticated requests to any page or API endpoint will be redirected to the login screen.
+
+## Endpoints
+
+<CardGroup cols={2}>
+  <Card title="/api/search" icon="magnifying-glass" href="/api/search">
+    Search TMDB for movies and TV shows by query string. Returns paginated results with title, poster, media type, and release date.
+  </Card>
+  <Card title="/api/details" icon="circle-info" href="/api/details">
+    Fetch detailed metadata for a specific movie or TV show by TMDB ID, including overview, genres, cast, season info, and more.
+  </Card>
+  <Card title="/api/scrape" icon="play" href="/api/scrape">
+    Resolve a playable stream URL for a movie or TV episode by TMDB ID using an installed `.rink` scraper plugin.
+  </Card>
+  <Card title="/api/proxy" icon="arrow-right-arrow-left" href="/api/proxy">
+    Server-side CORS proxy for HLS playlists and stream segments. Rewrites M3U8 segment paths and strips restrictive headers for browser playback.
+  </Card>
+  <Card title="/api/stream" icon="film" href="/api/stream">
+    Serve local video files from the server filesystem with HTTP range request support. Used for the local media library feature on Node.js deployments.
+  </Card>
+  <Card title="/api/stream" icon="film" href="/api/stream">
+    Serve local video files from the server filesystem with HTTP range request support. Used for the local media library feature on Node.js deployments.
+  </Card>
+</CardGroup>
+
+## Additional Endpoints
+
+### `GET /api/trending`
+
+Returns trending movies and TV shows from TMDB. Used internally by the homepage when `SHOW_TRENDING=true` is set. No query parameters required. Returns `{ results: TmdbResult[] }`.
+
+```bash
+curl "http://localhost:3000/api/trending"
+```
+
+### `POST /api/auth`
+
+Handles login, signup, and logout when `ENABLE_AUTH=true`. See [Authentication](/features/authentication) for details.

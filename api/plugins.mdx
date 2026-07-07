@@ -1,0 +1,188 @@
+---
+title: "nano scraper plugin system: installing and managing sources"
+sidebarTitle: "Plugins"
+description: "nano uses encrypted .rink plugin files to resolve stream URLs. Install bundled sources with the shiopa CLI or create custom plugins that implement the ScraperPlugin interface."
+---
+
+nano's stream resolution is powered by a plugin system. Each plugin is a `.rink` file — an AES-256-CBC encrypted JavaScript module that exports an object implementing the `ScraperPlugin` interface. Plugins live in `src/shade/private/` and are loaded at build time by Vite's glob import, decrypted in memory, and executed at runtime. No plugin source code is ever exposed to the client.
+
+## How plugins work
+
+<Steps>
+  <Step title="Glob import at build time">
+    Vite loads all `.rink` files from both `src/shade/catalog/` and `src/shade/private/` as `Uint8Array` binary data using `import.meta.glob` with the `?uint8array` query. The catalog directory contains bundled pre-compiled sources; the private directory is where activated plugins live.
+  </Step>
+  <Step title="Decrypt and execute at runtime">
+    `getPlugins()` iterates every loaded module, decrypts the binary content with a derived AES-256-CBC key, then evaluates the resulting CommonJS string with a sandboxed `new Function(...)` call. Each executed module's exports are collected into an array of `ScraperPlugin` objects. Duplicate `key` values are deduplicated — first occurrence wins.
+  </Step>
+  <Step title="Route the scrape request">
+    When `/api/scrape` receives a request with a `provider` query parameter, `resolveStream()` finds the plugin whose `key` matches `providerId`. If the plugin is `enabled`, its `fetchStream()` method is called with the TMDB `id`, content `type`, and optional `season` / `episode`.
+  </Step>
+  <Step title="Sanitize, proxy, and return">
+    The raw URL returned by `fetchStream()` is validated by `isAllowedStreamUrl()` and then wrapped in a `/api/proxy?data=…` URL so the browser never contacts the origin CDN directly. Subtitle URLs and quality variant URLs are proxied the same way.
+  </Step>
+</Steps>
+
+## The `ScraperPlugin` interface
+
+Every `.rink` module must export an object (or array of objects) that satisfies this TypeScript interface, defined in `src/lib/nano/plugins-loader.ts`:
+
+```typescript
+interface ScraperPlugin {
+  key: string;       // unique ID — must match the DEFAULT_SERVER env var or provider query param
+  name: string;      // display name shown in the player's server selector
+  enabled: boolean;  // set to false to disable the plugin without removing the file
+  rank: number;      // ordering priority; lower numbers sort higher in the server list
+  isDirect: boolean; // true when the plugin returns a direct media URL (not an embed iframe)
+  fetchStream: (
+    id: string,
+    type: string,        // "movie" or "tv"
+    season?: string,
+    episode?: string
+  ) => Promise<{
+    url: string;
+    isM3U8: boolean;
+    subtitles?: Array<{ src: string; label: string; language: string }>;
+  } | null>;
+}
+```
+
+<Note>
+  A plugin may also export an **array** of `ScraperPlugin` objects from a single `.rink` file. All entries in the array are registered individually and each must have a unique `key`.
+</Note>
+
+## Installing bundled sources with the `shiopa` CLI
+
+The `shiopa` CLI (installed globally from the `shiopa-nano` npm package) manages encrypted catalog sources. The catalog ships inside the npm package itself — `shiopa add` copies the appropriate `.rink` file from `src/shade/catalog/` into your active plugins directory (`src/shade/private/`) and registers the server in `config.shiopa.ts`.
+
+<CodeGroup>
+
+```bash Install a specific source
+# Install a single named source (e.g. "rei")
+shiopa add rei
+```
+
+```bash Install all bundled sources
+# Copy every .rink in the catalog into src/shade/private/
+shiopa add --all
+```
+
+```bash List available sources
+# Print all .rink file IDs in src/shade/catalog/
+shiopa list
+```
+
+</CodeGroup>
+
+After running `shiopa add`, the source ID is automatically appended to the `servers` array in `src/components/shiopa/config.shiopa.ts` so it appears in the player's server picker. You can set any installed source as the default via the `DEFAULT_SERVER` environment variable.
+
+### Bundled catalog sources
+
+The following sources are included in the `shiopa-nano` npm package and available via `shiopa add`:
+
+| Source ID | Display Name |
+|-----------|-------------|
+| `rei`     | Rei          |
+| `nemu`    | Nemu         |
+| `haru`    | Haru         |
+| `sora`    | Sora         |
+| `kisskh`  | KissKH       |
+| `yuki`    | Yuki         |
+| `aoi`     | Aoi          |
+| `ren`     | Ren          |
+| `nagi`    | Nagi         |
+| `kaede`   | Kaede        |
+| `hina`    | Hina         |
+| `riku`    | Riku         |
+| `kaze`    | Kaze         |
+| `noa`     | Noa          |
+| `akari`   | Akari        |
+| `yume`    | Yume         |
+| `momo`    | Momo         |
+| `xpass`   | XPass        |
+| `hana`    | Hana         |
+
+<Note>
+  The catalog `.rink` files are encrypted binaries. Their source is not publicly readable. They are bundled inside the `shiopa-nano` npm package and fetched automatically when you run `shiopa add`.
+</Note>
+
+## `getPlugins()`
+
+```typescript
+function getPlugins(): ScraperPlugin[]
+```
+
+`getPlugins()` is exported from `src/lib/nano/plugins-loader.ts` and returns all successfully loaded, deduplicated plugins at the time of the call. Plugins that fail decryption or execution are silently skipped. You can call this function directly for admin UI, debugging, or to enumerate the active server list at runtime:
+
+```typescript
+import { getPlugins } from "@/lib/nano/plugins-loader";
+
+const plugins = getPlugins();
+console.log(plugins.map((p) => ({ key: p.key, name: p.name, enabled: p.enabled })));
+```
+
+## `resolveStream()`
+
+```typescript
+async function resolveStream(
+  providerId: string,
+  id: string,
+  type: string,
+  season?: string,
+  episode?: string
+): Promise<StreamResult>
+```
+
+`resolveStream()` is exported from `src/lib/nano/index.ts` and is the main entry point called by the `/api/scrape` route handler. It:
+
+1. Calls `getPlugins()` and finds the plugin matching `providerId`
+2. Skips disabled plugins and returns an empty result without throwing
+3. Calls `plugin.fetchStream()` and passes the result through `finalizeStream()`
+4. Proxies the stream URL (and any subtitle/quality URLs) through `/api/proxy`
+
+The return type is `StreamResult`:
+
+```typescript
+type StreamResult = {
+  url: string;
+  isDirect: boolean;
+  isM3U8: boolean;
+  subtitles: Array<{ src: string; label: string; language: string }>;
+  qualities?: Array<{ label: string; url: string }>;
+};
+```
+
+An empty `StreamResult` (with `url: ""`) is returned when no matching plugin is found, the plugin is disabled, or `fetchStream()` returns `null` or throws.
+
+## Stream URL safety
+
+Before any URL is proxied or returned, nano validates it with `isAllowedStreamUrl()` from `src/lib/nano/stream-safety.ts`. The rules are:
+
+- The URL must be non-empty and non-whitespace
+- `blob:` URLs and `/api/stream` paths are always allowed
+- URLs matching a blocklist of explicit-content hostnames are rejected
+- All remaining URLs must begin with `http` or `/api/`
+
+URLs that fail validation cause `resolveStream()` to return the empty `StreamResult` rather than exposing the rejected URL to the client.
+
+<Tip>
+  If a custom plugin's stream URLs are being silently dropped, check the browser network tab for a `/api/scrape` response with `url: ""`. The URL returned by `fetchStream()` is likely being blocked by the safety filter — ensure it begins with `https://` and does not contain any blocked hostname patterns.
+</Tip>
+
+## Stream headers and origin spoofing
+
+For streams that require specific `Referer` or `Origin` headers (common with CDN-hosted HLS), nano automatically infers the correct headers based on either the `providerId` or the stream hostname. This logic lives in `src/lib/nano/stream-headers.ts` and is applied transparently before the proxy URL is constructed — plugin authors do not need to handle it manually.
+
+A plugin can optionally return a `headers` object alongside `url` and `isM3U8`; those headers are merged with the inferred ones (plugin-provided values take precedence):
+
+```typescript
+return {
+  url: "https://cdn.example.com/stream.m3u8",
+  isM3U8: true,
+  headers: {
+    Referer: "https://example.com/",
+    Origin:  "https://example.com",
+  },
+  subtitles: [],
+};
+```

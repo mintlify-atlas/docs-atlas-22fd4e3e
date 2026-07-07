@@ -1,0 +1,130 @@
+---
+title: "Protect your nano instance with authentication"
+sidebarTitle: "Authentication"
+description: "nano supports optional simple authentication with a login page backed by a PostgreSQL or JSON database. Enable it with ENABLE_AUTH=true and configure a database."
+---
+
+nano includes an optional authentication layer that gates the entire app behind a login page. When enabled, unauthenticated visitors are redirected to `/login` before they can search or watch anything. Authentication is a simple username/password system — suitable for protecting personal or family instances — backed by either a PostgreSQL database or a local JSON file.
+
+<Note>
+  Authentication in nano is a standalone local system, not OAuth, SSO, or any federated identity provider. It is designed to protect a personal or small-group self-hosted instance, not for multi-tenant or publicly registered deployments.
+</Note>
+
+## Enabling authentication
+
+Set the `ENABLE_AUTH` variable to activate the login gate:
+
+```bash
+ENABLE_AUTH=true
+```
+
+With this flag set, every page in nano checks for a `user` cookie. If the cookie is absent, the request is redirected to `/login`. After a successful login or sign-up, the cookie is set with `path=/` and the user is redirected to the home page.
+
+## Database setup
+
+nano stores user accounts in the configured database. Two database types are supported:
+
+<Tabs>
+  <Tab title="PostgreSQL (recommended for production)">
+    ```bash
+    DATABASE_TYPE=postgres
+    DATABASE_URL=postgresql://user:password@host:5432/dbname
+    ```
+
+    nano uses the `DATABASE_URL` connection string to connect to PostgreSQL. The users table must have the following schema:
+
+    ```sql
+    CREATE TABLE users (
+      username TEXT PRIMARY KEY,
+      password TEXT NOT NULL,
+      salt     TEXT NOT NULL
+    );
+    ```
+  </Tab>
+  <Tab title="JSON file (default)">
+    ```bash
+    DATABASE_TYPE=json
+    ```
+
+    When `DATABASE_TYPE=json` (or `DATABASE_URL` is not set), nano persists user data in a local JSON file on the server's filesystem. No additional configuration is required.
+
+    <Warning>
+      The JSON database stores user credentials in a plain file on disk. It is **not suitable** for production multi-user deployments. Use PostgreSQL for any instance shared with more than a handful of trusted people.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## How authentication works
+
+nano implements password hashing using Node.js's built-in `crypto` module — no external auth library is required.
+
+**Password hashing** — when a user signs up, a random 16-byte salt is generated and a derived key is produced using PBKDF2:
+
+```typescript
+// src/server/auth.ts
+function hashPassword(password: string, salt: string): string {
+  return crypto.pbkdf2Sync(password, salt, 1000, 64, "sha512").toString("hex");
+}
+
+export async function handleSignup(username: string, password: string) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = hashPassword(password, salt);
+  await query(
+    "INSERT INTO users (username, password, salt) VALUES ($1, $2, $3)",
+    [username, hash, salt]
+  );
+}
+```
+
+**Login** — the stored salt is retrieved for the given username, the submitted password is hashed with the same parameters, and the result is compared to the stored hash:
+
+```typescript
+export async function handleLogin(username: string, password: string) {
+  const res = await query("SELECT * FROM users WHERE username = $1", [username]);
+  if (res.rows.length === 0) throw new Error("User not found");
+
+  const user = res.rows[0];
+  const hash = hashPassword(password, user.salt);
+  if (user.password !== hash) throw new Error("Invalid password");
+}
+```
+
+**Session** — after a successful login or sign-up, the API route at `POST /api/auth` sets a `user` cookie containing the username. There is no JWT or session store — the presence of the cookie is the session token.
+
+## API endpoints
+
+The auth API is handled by a single endpoint:
+
+<ParamField body="action" type="string" required>
+  One of `"login"`, `"signup"`, or `"logout"`.
+</ParamField>
+
+<ParamField body="username" type="string" required>
+  The account username.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The account password. Sent over HTTPS; hashed server-side before storage or comparison.
+</ParamField>
+
+```bash
+# Log in
+POST /api/auth
+{ "action": "login", "username": "alice", "password": "hunter2" }
+
+# Sign up
+POST /api/auth
+{ "action": "signup", "username": "alice", "password": "hunter2" }
+
+# Log out
+POST /api/auth
+{ "action": "logout" }
+```
+
+A successful response returns `{ "success": true }` with HTTP 200. Errors return `{ "error": "<message>" }` with HTTP 400 or 500.
+
+## User management
+
+There is no built-in admin panel for managing user accounts. Users can create accounts directly through the login page at `/login` using the "create account" toggle. To pre-create accounts or delete them, insert or remove rows directly in the database.
+
+The login page automatically adapts its labels and button text to the active locale — all strings (`login`, `signUp`, `createAccount`, `backToLogin`, etc.) are pulled from the `TRANSLATIONS` object and rendered server-side in the user's language.

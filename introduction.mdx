@@ -1,0 +1,56 @@
+---
+title: "nano: minimalist self-hosted streaming interface"
+sidebarTitle: "Introduction"
+description: "nano is a zero-bloat, self-hostable web interface for movies and TV shows. Instant TMDB search, plugin-based stream resolution, and a built-in video player."
+---
+
+**nano** (shiopa nano) is a self-hostable, zero-bloat web interface for discovering and streaming movies and TV shows. It gives you a fast, private front-end that fetches metadata from TMDB, resolves streams via an encrypted plugin system (`.rink` files), and plays them through a built-in video player — all without ads, trackers, or accounts. Whether you're a developer who wants a personal media portal or a homelab enthusiast who needs a clean self-hosted alternative to bloated streaming sites, nano strips the experience down to exactly what you need.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Instant TMDB Search" icon="magnifying-glass">
+    Live search suggestions powered by The Movie Database (TMDB). Titles, posters, and metadata load instantly as you type. A built-in API key fallback means you don't need your own TMDB credentials to get started.
+  </Card>
+  <Card title="Encrypted .rink Plugin System" icon="plug">
+    Stream sources are packaged as encrypted `.rink` files. Add or swap sources without touching application code. The `shiopa` CLI manages plugin installation with a single command.
+  </Card>
+  <Card title="Built-in Video Player" icon="play">
+    Ships with a custom HTML5 player (hls.js) and optional Vidstack player for advanced controls. Supports HLS streaming, autoplay, and fullscreen out of the box.
+  </Card>
+  <Card title="Server-side Proxy" icon="server">
+    A range-request proxy rewrites M3U8 playlists and proxies video segments server-side, solving CORS restrictions from third-party stream sources without any client-side workarounds.
+  </Card>
+  <Card title="16-Language i18n" icon="globe">
+    The interface ships with translations for 16 languages. Set your default with `DEFAULT_LOCALE` and let users switch at runtime via the header language selector.
+  </Card>
+  <Card title="Flexible Deployment" icon="rocket">
+    First-class support for Docker, Vercel, Railway, Cloudflare Workers/Pages, and Render. Every deployment target is a single config file away.
+  </Card>
+  <Card title="Runtime Environment Configuration" icon="sliders">
+    Every setting — theming, player options, features, auth — is controlled by environment variables. No recompilation needed. Pass `-e` flags to Docker or edit `.env` and restart.
+  </Card>
+  <Card title="Optional Auth & Local Library" icon="lock">
+    Enable a simple login page with `ENABLE_AUTH=true`. Optionally enable a local media library (`ENABLE_LOCAL_LIBRARY`) for curating your own catalogue alongside scraped results.
+  </Card>
+</CardGroup>
+
+## Architecture Overview
+
+nano is built on **Astro** in full SSR (`output: 'server'`) mode with **React** islands for interactive components. Here is how a stream request flows through the stack:
+
+1. **Search & metadata** — The Astro front-end calls the TMDB API (v3/v4) server-side to fetch titles, posters, cast, and episode data. The built-in fallback key is used when you haven't configured your own `TMDB_API_KEY`.
+
+2. **Stream resolution via `.rink` plugins** — When a user selects a title, nano loads the appropriate `.rink` scraper plugin (encrypted with `@rinko67/rinke`). The plugin resolves a stream URL or HLS manifest for that title from its configured source.
+
+3. **Server-side M3U8 proxy** — HLS manifests and video segment URLs often carry CORS restrictions. nano's proxy layer (Astro API routes under `/api/`) rewrites manifest playlists so all segment requests are tunnelled through your own domain, removing cross-origin issues entirely.
+
+4. **Video player** — The rewritten HLS stream is handed to the video player. By default this is a lightweight custom HTML5 player backed by `hls.js`. Setting `USE_VIDSTACK=true` swaps it for the full-featured Vidstack player with advanced controls, quality selection, and keyboard shortcuts.
+
+5. **Runtime config injection** — On each page render, Astro serialises your environment variables into `window.__SHIOPA_CONFIG__` so React components read configuration without a build step.
+
+<Note>
+  nano is a **search and stream aggregator**, not a media host. It does not store, upload, or distribute any video content. All streams are sourced from third-party providers resolved at runtime by `.rink` plugins. You are responsible for ensuring your usage complies with applicable laws and the terms of service of any stream source you use.
+</Note>
+
+Ready to get nano running in minutes? Head to the [Quickstart](/quickstart).

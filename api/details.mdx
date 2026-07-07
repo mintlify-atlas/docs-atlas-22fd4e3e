@@ -1,0 +1,112 @@
+---
+title: "GET /api/details — fetch title metadata from TMDB"
+sidebarTitle: "/api/details"
+description: "Fetch detailed metadata for a movie or TV show by TMDB ID. Returns title, overview, genres, cast, season info, and more. Adult content is blocked at this endpoint."
+---
+
+`/api/details` retrieves full metadata for a movie, TV show, or specific TV season from the TMDB API. nano uses this endpoint to populate title pages, episode selectors, and the scrape pipeline's adult-content check. The raw TMDB response is passed through directly, giving you access to the complete set of fields TMDB provides.
+
+## Request
+
+**Method:** `GET`  
+**Path:** `/api/details`
+
+<ParamField query="id" type="string" required>
+  The TMDB ID of the movie or TV show to fetch.
+</ParamField>
+
+<ParamField query="type" type="string" default="movie">
+  Media type. Must be `"movie"` or `"tv"`. Determines which TMDB endpoint is called (`/movie/{id}` vs. `/tv/{id}`).
+</ParamField>
+
+<ParamField query="season" type="string">
+  Season number for TV shows. When provided, the endpoint calls `/tv/{id}/season/{season}` instead of `/tv/{id}`, returning season-level details including the episode list. Only applicable when `type=tv`.
+</ParamField>
+
+## Response
+
+**Content-Type:** `application/json`
+
+The response body is the raw JSON returned by TMDB. The exact shape depends on the `type` and whether `season` is specified. Common fields include:
+
+<ResponseField name="id" type="number">
+  TMDB ID.
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  Movie title (movies only).
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  TV show or season name (TV only).
+</ResponseField>
+
+<ResponseField name="overview" type="string">
+  Plot summary.
+</ResponseField>
+
+<ResponseField name="poster_path" type="string">
+  Poster image path. Prefix with `https://image.tmdb.org/t/p/w500` to get the full URL.
+</ResponseField>
+
+<ResponseField name="backdrop_path" type="string">
+  Backdrop/hero image path.
+</ResponseField>
+
+<ResponseField name="genres" type="array">
+  Array of `{ id, name }` genre objects.
+</ResponseField>
+
+<ResponseField name="vote_average" type="number">
+  TMDB community rating (0–10).
+</ResponseField>
+
+<ResponseField name="runtime" type="number">
+  Runtime in minutes (movies only).
+</ResponseField>
+
+<ResponseField name="seasons" type="array">
+  Array of season summary objects (TV show top-level only, not present on season requests).
+</ResponseField>
+
+<ResponseField name="episodes" type="array">
+  Array of episode objects (only present when `season` is specified).
+</ResponseField>
+
+<ResponseField name="adult" type="boolean">
+  TMDB adult content flag. If `true`, the endpoint returns HTTP 403 instead of the data (see below).
+</ResponseField>
+
+## Adult Content Blocking
+
+If TMDB marks the requested title with `adult: true`, `/api/details` blocks the response and returns HTTP `403` with the following body:
+
+```json
+{
+  "error": "Adult content blocked",
+  "title": "Content Blocked",
+  "overview": "This content has been blocked due to adult content restrictions.",
+  "blocked": true
+}
+```
+
+## Examples
+
+```bash
+# Fetch movie details for Inception (TMDB ID 27205)
+curl "http://localhost:3000/api/details?id=27205&type=movie"
+
+# Fetch TV show details for Breaking Bad (TMDB ID 1396)
+curl "http://localhost:3000/api/details?id=1396&type=tv"
+
+# Fetch season 1 episode list for Breaking Bad
+curl "http://localhost:3000/api/details?id=1396&type=tv&season=1"
+```
+
+## Error Responses
+
+| Status | Body | Cause |
+|---|---|---|
+| `400` | `{ "error": "Missing ID" }` | The `id` parameter was not provided. |
+| `403` | `{ "error": "Adult content blocked", "blocked": true, ... }` | TMDB flagged the title as adult content. |
+| `500` | `{ "error": "Failed to fetch TMDB" }` | TMDB returned a non-OK status or the request failed. |

@@ -1,0 +1,137 @@
+---
+title: "Deploy nano with Docker or Docker Compose"
+sidebarTitle: "Docker"
+description: "Run nano as a Docker container using the pre-built GitHub Container Registry image or build from source. Includes Docker Compose setup and environment variable reference."
+---
+
+Docker is the fastest and most self-contained way to run nano. You can pull a pre-built image from the GitHub Container Registry and be up in seconds, or build the image yourself directly from the source. Both paths produce an identical runtime: a Node.js 22 Alpine container listening on port 3000.
+
+## Pre-built Image
+
+The quickest way to get nano running is to pull the image that is automatically published to the GitHub Container Registry on every release. No local build tools are required.
+
+```bash
+docker pull ghcr.io/mohameodo/nano:latest
+docker run -p 3000:3000 -e SITE_NAME="my nano site" ghcr.io/mohameodo/nano:latest
+```
+
+Once the container starts, open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Build from Source
+
+If you want to build the image yourself — for example to test a local change or pin a custom commit — clone the repository and run the standard Docker build command.
+
+```bash
+docker build -t nano .
+docker run -p 3000:3000 -e SITE_NAME="my nano site" nano
+```
+
+### How the Dockerfile Works
+
+The `Dockerfile` uses a three-stage multi-stage build to keep the final image lean:
+
+| Stage | Base | Purpose |
+|-------|------|---------|
+| `base` | `node:22-alpine` | Enables `corepack` / pnpm, copies package manifests |
+| `build` | `base` | Runs `pnpm install --frozen-lockfile` and `pnpm build` |
+| `runtime` | `base` | Copies only `dist/` and `node_modules/` from the build stage |
+
+The runtime stage sets `HOST=0.0.0.0` and `PORT=3000` and starts the server with:
+
+```bash
+node dist/server/entry.mjs
+```
+
+<Tip>
+  The final image is based on `node:22-alpine`, which keeps it small and fast to pull. The production entry point is always `node dist/server/entry.mjs` — the compiled Astro Node standalone output.
+</Tip>
+
+## Docker Compose
+
+For a persistent, auto-restarting deployment, use Docker Compose. The repository ships a ready-to-use `docker-compose.yml`:
+
+```yaml
+services:
+  shiopa-nano:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - TMDB_ACCESS_TOKEN=${TMDB_ACCESS_TOKEN}
+    env_file:
+      - .env
+    restart: always
+```
+
+Key points:
+
+- **Port mapping `3000:3000`** — maps host port 3000 to container port 3000. Change the left-hand side to use a different host port (e.g. `8080:3000`).
+- **`env_file: .env`** — loads every variable from your local `.env` file into the container. Create it from the example file before your first deploy.
+- **`restart: always`** — Docker automatically restarts the container on failure or after a host reboot.
+- **`TMDB_API_KEY` / `TMDB_ACCESS_TOKEN`** — passed through from your shell or `.env` file; both are optional because nano has a built-in fallback key.
+
+### Start with Docker Compose
+
+<Steps>
+  <Step title="Create your .env file">
+    Copy the example environment file and edit it with your preferred settings:
+
+    ```bash
+    cp .env.example .env
+    # open .env in your editor and adjust values
+    ```
+  </Step>
+
+  <Step title="Start the container">
+    ```bash
+    docker compose up -d
+    ```
+
+    The `-d` flag runs the service in the background. On the first run, Docker builds the image from source before starting.
+  </Step>
+
+  <Step title="Verify it is running">
+    ```bash
+    docker compose ps
+    docker compose logs -f shiopa-nano
+    ```
+  </Step>
+
+  <Step title="Stop or restart">
+    ```bash
+    docker compose down      # stop and remove containers
+    docker compose restart   # restart without rebuilding
+    ```
+  </Step>
+</Steps>
+
+## Environment Variables
+
+Pass environment variables with `-e KEY=value` for single containers, or add them to your `.env` file for Docker Compose. The most important runtime variables are listed below.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | Port the server listens on inside the container |
+| `HOST` | `0.0.0.0` | Network interface to bind (keep `0.0.0.0` in Docker) |
+| `TMDB_API_KEY` | *(built-in fallback)* | Your TMDB v3 API key |
+| `TMDB_ACCESS_TOKEN` | *(built-in fallback)* | Your TMDB v4 read-access token |
+| `SITE_NAME` | `shiopa nano` | Display name shown in the UI and browser tab |
+| `THEME_HUE` | `200` | Accent color hue (0–360) |
+| `THEME_MODE` | `dark` | Color scheme: `dark` or `light` |
+| `DEFAULT_SERVER` | `nemu` | Default streaming server to use |
+| `ENABLE_AUTH` | `false` | Enable simple login page (`true` / `false`) |
+| `DATABASE_TYPE` | `json` | Storage backend: `json` or `postgres` |
+| `DATABASE_URL` | — | PostgreSQL connection string (when `DATABASE_TYPE=postgres`) |
+
+For the full list of every supported variable, see the [Configuration reference](/configuration).
+
+## Important Notes
+
+<Note>
+  The local file streaming route (`/api/stream`) is only available on Node.js deployments. It is **not** supported on Cloudflare Workers. If you need local media file serving, stick with the Docker or Railway deployment.
+</Note>

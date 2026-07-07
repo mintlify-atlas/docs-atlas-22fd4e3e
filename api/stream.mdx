@@ -1,0 +1,108 @@
+---
+title: "GET /api/stream — serve local video files with range support"
+sidebarTitle: "/api/stream"
+description: "nano's local stream endpoint serves video files from the server filesystem with HTTP range request support. Used for the local media library feature on Node.js deployments."
+---
+
+`/api/stream` serves video files directly from the server's filesystem. It supports HTTP Range requests so browsers and media players can seek through large files without downloading them entirely. This endpoint powers nano's local media library feature, which lets you point nano at a directory of video files and play them through the same player interface used for scraped streams.
+
+## Availability
+
+`/api/stream` is only available on **Node.js deployments**. If any of the environment variables `CF_PAGES`, `CLOUDFLARE`, or `WORKERS_CI` are set (indicating a Cloudflare Workers/Pages environment), the endpoint returns:
+
+```
+HTTP 501 Not Supported
+Local streaming is not supported on Cloudflare
+```
+
+## Request
+
+**Method:** `GET`  
+**Path:** `/api/stream`
+
+<ParamField query="path" type="string" required>
+  Relative path to the video file to serve. When `base` is also provided, `path` is resolved relative to the `base` directory. Otherwise it is resolved from the current working directory using `path.resolve()`.
+</ParamField>
+
+<ParamField query="base" type="string">
+  Base directory or path to a JSON configuration file. When provided, `path` is joined with this directory. If `base` itself ends in `.json` (e.g. a `rink.json` library config path), the containing directory of that file is used as the base. This allows nano to resolve media paths relative to a library config file without you having to compute the directory yourself.
+</ParamField>
+
+## Range Requests
+
+The endpoint advertises range support via `Accept-Ranges: bytes` on every response. To request a byte range, include the standard `Range` header:
+
+```
+Range: bytes=<start>-<end>
+```
+
+A successful partial-content response has status `206 Partial Content` and includes:
+
+```
+Content-Range: bytes <start>-<end>/<total>
+Content-Length: <chunk size>
+```
+
+If the requested range falls outside the file size, the endpoint returns `416 Range Not Satisfiable` with a `Content-Range: bytes */<total>` header.
+
+## Supported Formats
+
+The `Content-Type` response header is inferred from the file extension:
+
+| Extension | Content-Type |
+|---|---|
+| `.mp4` | `video/mp4` |
+| `.mkv` | `video/x-matroska` |
+| `.webm` | `video/webm` |
+| `.avi` | `video/x-msvideo` |
+| `.vtt` | `text/vtt` |
+| `.srt` | `text/vtt` (auto-converted to WebVTT) |
+
+Files not matching any of the above extensions default to `video/mp4`.
+
+## SRT Subtitle Conversion
+
+When the requested file has a `.srt` extension, the endpoint reads the file as UTF-8 text, converts the comma-separated millisecond timestamps to the dot-separated format required by WebVTT, prepends the `WEBVTT` header, and returns the result with `Content-Type: text/vtt`. The original `.srt` file is never served directly.
+
+## Response Headers
+
+| Header | Value |
+|---|---|
+| `Access-Control-Allow-Origin` | `*` |
+| `Access-Control-Allow-Methods` | `GET, OPTIONS` |
+| `Access-Control-Allow-Headers` | `*` |
+| `Accept-Ranges` | `bytes` |
+| `Content-Range` | `bytes <start>-<end>/<total>` (206 responses only) |
+| `Content-Length` | File size or chunk size in bytes |
+
+## Error Responses
+
+| Status | Message | Cause |
+|---|---|---|
+| `400` | `Missing path parameter` | The `path` query parameter was not provided. |
+| `400` | `Not a file` | The resolved path exists but is a directory, not a file. |
+| `404` | `File not found` | The resolved path does not exist on the filesystem. |
+| `416` | `Requested range not satisfiable` | The `Range` header specifies a range outside the file bounds. |
+| `500` | `Error streaming file: <message>` | An unexpected filesystem read error occurred. |
+| `501` | `Local streaming is not supported on Cloudflare` | The instance is running on Cloudflare Workers/Pages. |
+
+## Examples
+
+```bash
+# Serve the full file
+curl "http://localhost:3000/api/stream?path=movies/inception.mp4&base=/media"
+
+# Seek to a position — request the first 1 MB
+curl -H "Range: bytes=0-1048575" \
+  "http://localhost:3000/api/stream?path=movies/inception.mp4&base=/media"
+
+# Serve a subtitle file (auto-converted to WebVTT)
+curl "http://localhost:3000/api/stream?path=movies/inception.en.srt&base=/media"
+
+# Resolve path relative to a rink.json library config
+curl "http://localhost:3000/api/stream?path=inception.mp4&base=/home/user/media/rink.json"
+```
+
+<Warning>
+  `/api/stream` resolves paths on the **server filesystem** using Node.js `path.resolve`. In production, always source `path` and `base` values from your own trusted `rink.json` local library config. Never pass user-supplied path strings directly to this endpoint, as doing so may expose arbitrary files on your server.
+</Warning>

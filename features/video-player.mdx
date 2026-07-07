@@ -1,0 +1,142 @@
+---
+title: "nano video player: HLS streaming with subtitle support"
+sidebarTitle: "Video Player"
+description: "nano ships two video player modes: a native HTML5 player and an advanced Vidstack player. Both support HLS, subtitles, quality switching, and server selection."
+---
+
+nano includes a fully custom video player built for streaming movies and TV shows. You can choose between a lightweight native HTML5 player and an advanced Vidstack-powered player, both of which support HLS adaptive streaming, automatic subtitle loading, quality selection, and multi-server fallback — all configured through environment variables at deploy time.
+
+## Choosing a player mode
+
+nano exposes the `USE_VIDSTACK` environment variable to switch between the two player implementations.
+
+<Tabs>
+  <Tab title="HTML5 Player (default)">
+    ```bash
+    USE_VIDSTACK=false
+    ```
+
+    The default native HTML5 player is a lightweight React component built on top of the browser's `<video>` element and `hls.js`. It includes:
+
+    - Custom progress bar with seek, buffer indicator, and hover timestamp
+    - Play/pause, mute, and volume slider controls
+    - Fullscreen toggle (with landscape lock on mobile)
+    - Server selector dropdown
+    - Quality selector (when the source provides multiple levels)
+    - Download button for direct video links
+
+    This mode adds minimal JavaScript to the page and starts playing quickly on cold starts. It is the recommended option for most self-hosted deployments.
+  </Tab>
+  <Tab title="Vidstack Player">
+    ```bash
+    USE_VIDSTACK=true
+    ```
+
+    The Vidstack player wraps the `@vidstack/react` `MediaPlayer` component with the default video layout. It provides:
+
+    - Richer, accessible control bar with keyboard shortcut support
+    - Vidstack's built-in adaptive quality management
+    - Full ARIA labeling and screen reader support
+    - Consistent cross-browser styling via Vidstack's default theme CSS
+
+    When `USE_VIDSTACK=true`, HLS sources are passed with an explicit MIME type (`application/x-mpegurl`) so Vidstack handles adaptive playback natively.
+  </Tab>
+</Tabs>
+
+<Tip>
+  Vidstack loads additional CSS and JavaScript bundles (`@vidstack/react` player styles and layout icons). On cold starts — such as serverless or edge deployments — this can add noticeable initial load time compared to the native HTML5 player.
+</Tip>
+
+## Server selection
+
+nano routes playback through streaming servers identified by short IDs. The active server is set at startup via the `DEFAULT_SERVER` environment variable.
+
+```bash
+# .env
+DEFAULT_SERVER=rei
+```
+
+The default production server is `rei`. In development mode (`DEV=true`), the default switches to `momo` and additional servers become available (including `xpass`, `hana`, `nemu`, `kisskh`, `haru`, `sora`, `yuki`, `aoi`, `ren`, `nagi`, `kaede`, `hina`, `riku`, `kaze`, `noa`, `akari`, and `yume`).
+
+The server list is defined in `config.shiopa.ts` as an array of `{ id, name }` objects. Users can switch servers at runtime using the server dropdown in the player header — the currently active server is highlighted with a checkmark.
+
+```typescript
+// server shape from the player props
+interface ServerInfo {
+  id: string;
+  name: string;
+}
+```
+
+## Autoplay
+
+Control whether playback starts automatically when a video loads:
+
+```bash
+AUTOPLAY=true   # default — starts playing immediately
+AUTOPLAY=false  # pauses on load, waiting for user interaction
+```
+
+Note that browsers may still block autoplay for unmuted video regardless of this setting. nano calls `video.play()` with a `.catch(() => {})` guard to handle browser policy silently.
+
+## Subtitles
+
+Subtitles are automatically fetched for the current movie or TV episode and rendered as `<track>` elements inside the `<video>` tag (or as Vidstack `<track>` children). Each subtitle object has the following shape:
+
+```typescript
+interface Subtitle {
+  src: string;       // URL to the .vtt (or proxied .srt) subtitle file
+  label: string;     // Display name shown in the track menu
+  language: string;  // BCP-47 language code (e.g. "en", "fr")
+}
+```
+
+Subtitle files are sourced from `sub.vdrk.site` using the TMDB ID of the movie or episode. `.srt` files are converted to WebVTT on-the-fly: the proxy rewrites the timestamp separators (`,` → `.`) and prepends the required `WEBVTT` header before serving the file to the player.
+
+## HLS support
+
+For streams delivered as M3U8 playlists, nano uses `hls.js` in the HTML5 player mode. When the source URL contains `.m3u8` or `/hls/`, or when the `isM3U8` flag is set, nano initialises an `Hls` instance with the following configuration:
+
+```typescript
+const hls = new Hls({
+  maxBufferLength: 30,
+  maxMaxBufferLength: 180,
+  maxBufferSize: 180 * 1024 * 1024,
+  backBufferLength: 30,
+  startLevel: -1,          // auto quality selection on start
+  autoStartLoad: true,
+  capLevelToPlayerSize: true,
+  enableWorker: true,
+});
+```
+
+If the browser natively supports HLS (e.g. Safari on macOS/iOS), nano skips `hls.js` and sets the `src` attribute directly, letting the browser handle playback.
+
+M3U8 playlists served through nano's `/api/proxy` endpoint have all segment URLs rewritten to go through the proxy, so every HLS request is proxied rather than hitting the origin server directly from the browser.
+
+In Vidstack mode, the source is passed as:
+
+```typescript
+src={{ src: embedUrl, type: "application/x-mpegurl" }}
+```
+
+which instructs Vidstack to handle the stream as HLS rather than a plain video file.
+
+## Quality switching
+
+When the streaming source exposes multiple quality levels (e.g. `720p`, `1080p`, `4K`), the HTML5 player renders a quality selector in the control bar. Selecting a quality:
+
+1. Saves the current playback position and play/pause state.
+2. Calls `attachSource()` with the new URL.
+3. Seeks back to the saved position once the new source fires `canplay`.
+
+Quality levels are passed to the player as an array:
+
+```typescript
+interface Quality {
+  label: string;  // e.g. "1080p", "720p"
+  url: string;    // Direct stream URL for this quality
+}
+```
+
+In Vidstack mode, adaptive quality selection is managed automatically by Vidstack's internal ABR algorithm — no manual selection is required unless the user wants to pin a specific resolution.

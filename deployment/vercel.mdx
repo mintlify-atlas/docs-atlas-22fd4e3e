@@ -1,0 +1,83 @@
+---
+title: "Deploy nano to Vercel as a serverless app"
+sidebarTitle: "Vercel"
+description: "Deploy nano to Vercel using the official Astro Vercel adapter. Configure environment variables in the Vercel dashboard and deploy from GitHub."
+---
+
+Vercel is a zero-configuration platform that can host nano as a fully serverless Astro application. When Vercel detects the `VERCEL=1` environment variable at build time, nano automatically switches to the `@astrojs/vercel/serverless` adapter — no manual config changes required. The repository ships a `vercel.json` that handles the rest.
+
+## How nano Detects Vercel
+
+The `astro.config.mjs` adapter selection logic checks the runtime environment at build time:
+
+- If `process.env.VERCEL` is set → uses `@astrojs/vercel/serverless`
+- If `CF_PAGES`, `CLOUDFLARE`, or `WORKERS_CI` are set → uses `@astrojs/cloudflare`
+- Otherwise → uses `@astrojs/node` in standalone mode (default for Docker / Railway)
+
+Vercel sets `VERCEL=1` automatically during every build, so you never need to set it yourself.
+
+## vercel.json
+
+The repository includes a `vercel.json` that tells Vercel exactly how to build nano:
+
+```json
+{
+  "version": 2,
+  "cleanUrls": true,
+  "framework": "astro",
+  "buildCommand": "pnpm build",
+  "installCommand": "pnpm install"
+}
+```
+
+- **`framework: "astro"`** — tells Vercel to treat this as an Astro project for auto-detection and optimisations.
+- **`buildCommand: "pnpm build"`** — uses pnpm instead of npm or yarn.
+- **`installCommand: "pnpm install"`** — ensures pnpm is used for dependency installation.
+- **`cleanUrls: true`** — strips `.html` extensions from URLs for cleaner routing.
+
+## Deploy to Vercel
+
+<Steps>
+  <Step title="Push your repo to GitHub">
+    Make sure your nano fork or clone is pushed to a GitHub repository (GitLab and Bitbucket also work with Vercel).
+  </Step>
+
+  <Step title="Import the project in Vercel">
+    Go to [vercel.com/new](https://vercel.com/new), click **Add New → Project**, and select your GitHub repository. Vercel auto-detects the Astro framework from `vercel.json` and pre-fills the build settings.
+  </Step>
+
+  <Step title="Set environment variables">
+    Before deploying, open **Project → Settings → Environment Variables** and add your configuration. At minimum, consider setting:
+
+    | Variable | Example value | Notes |
+    |----------|--------------|-------|
+    | `TMDB_API_KEY` | `abc123...` | Optional — nano has a built-in fallback |
+    | `TMDB_ACCESS_TOKEN` | `eyJ...` | Optional — nano has a built-in fallback |
+    | `SITE_NAME` | `my nano` | Display name in the UI |
+    | `DEFAULT_SERVER` | `nemu` | Default streaming server |
+    | `THEME_HUE` | `200` | Accent colour hue 0–360 |
+    | `THEME_MODE` | `dark` | `dark` or `light` |
+    | `ENABLE_AUTH` | `false` | Set `true` to enable login page |
+    | `DATABASE_TYPE` | `json` | Use `json` on Vercel (no PostgreSQL native driver) |
+
+    All variables set here are securely injected at both build time and runtime.
+  </Step>
+
+  <Step title="Deploy">
+    Click **Deploy**. Vercel runs `pnpm install` followed by `pnpm build` inside a serverless build container. After a successful build, your nano instance is live at `https://your-project.vercel.app`.
+  </Step>
+</Steps>
+
+## Redeployments
+
+Every push to your connected branch triggers an automatic redeploy. You can also trigger a manual redeploy from the Vercel dashboard under **Deployments → Redeploy**.
+
+## Limitations
+
+<Warning>
+  Local file streaming via `/api/stream?path=...` does **not** work on Vercel serverless. The serverless runtime has no access to a persistent local filesystem. Use nano on Vercel only for metadata lookups (TMDB) and remote stream proxying — direct local media serving requires a Node.js host such as Docker or Railway.
+</Warning>
+
+<Note>
+  `TMDB_API_KEY` and `TMDB_ACCESS_TOKEN` are both optional. nano ships with a built-in fallback key so TMDB data loads even if you do not provide your own. For production deployments with heavy traffic, supplying your own key is recommended to avoid rate limiting.
+</Note>

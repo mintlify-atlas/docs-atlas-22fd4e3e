@@ -1,0 +1,216 @@
+---
+title: "Write a custom .rink scraper plugin for nano"
+sidebarTitle: "Rink Format"
+description: "A .rink file is an AES-256-CBC encrypted CommonJS module that exports a ScraperPlugin object. Learn how to write, compile, and install a custom scraper source."
+---
+
+A `.rink` file is an encrypted CommonJS module. Before encryption it is a plain `.js` (or `.ts`) file that exports a `ScraperPlugin` object — or an array of them. nano's build pipeline compiles the source with esbuild, encrypts the resulting bundle with AES-256-CBC, and stores the ciphertext as a binary file. At runtime, `getPlugins()` reverses this process in memory: it decrypts and evaluates the bundle, then registers the resulting exports as active stream providers.
+
+<Warning>
+  Custom plugins that scrape third-party streaming sites may violate those sites' terms of service or applicable copyright law. You are solely responsible for ensuring your plugins comply with all relevant laws and terms.
+</Warning>
+
+## Unencrypted plugin structure
+
+Before compilation, a plugin source file is a standard Node.js CommonJS module. It must assign a `ScraperPlugin` object — or an array of them — to `module.exports`. The shape of the export must satisfy the `ScraperPlugin` interface described in the [Plugins reference](/api/plugins).
+
+```javascript
+module.exports = {
+  key: "my-source",   // unique ID — used as the DEFAULT_SERVER value and provider query param
+  name: "My Source",  // display name shown in the player server selector
+  enabled: true,
+  rank: 1,            // lower = higher priority in the server list
+  isDirect: true,     // true when this plugin returns a direct stream URL
+
+  async fetchStream(id, type, season, episode) {
+    // id      — TMDB ID string (e.g. "550" for Fight Club)
+    // type    — "movie" or "tv"
+    // season  — season number string, only present when type === "tv"
+    // episode — episode number string, only present when type === "tv"
+
+    const baseUrl =
+      type === "movie"
+        ? `https://example.com/movie/${id}`
+        : `https://example.com/tv/${id}/${season}/${episode}`;
+
+    return {
+      url: baseUrl,
+      isM3U8: false, // set true for HLS (.m3u8) streams
+      subtitles: [],
+    };
+  },
+};
+```
+
+<Note>
+  The bundled catalog sources installed via `shiopa add` are pre-compiled and ready to use. You only need to write and compile your own `.rink` if you want to add a custom source that isn't in the catalog.
+</Note>
+
+## Important constraints
+
+<CardGroup cols={2}>
+  <Card title="CommonJS only" icon="box">
+    The module must use `module.exports`, not ESM `export default`. The compile script bundles with esbuild in `cjs` format.
+  </Card>
+  <Card title="No dynamic imports" icon="ban">
+    Do not use `import()`. Use `require()` for any dependencies. Only Node.js built-ins and global `fetch` are available inside the sandbox at runtime.
+  </Card>
+  <Card title="Unique key" icon="key">
+    The `key` field must be unique across all installed plugins. Duplicate keys are silently deduplicated — only the first loaded plugin with a given key is registered.
+  </Card>
+  <Card title="Return null on failure" icon="circle-xmark">
+    `fetchStream` must return `null` when the source is unavailable or the content isn't found. Do **not** throw — unhandled exceptions from `fetchStream` are caught but leave no trace in the response.
+  </Card>
+</CardGroup>
+
+## Returning subtitles
+
+If the source provides subtitle tracks, include them in the returned object. nano proxies each subtitle URL through `/api/proxy` the same way it handles stream URLs:
+
+```javascript
+return {
+  url: "https://cdn.example.com/stream.mp4",
+  isM3U8: false,
+  subtitles: [
+    {
+      src: "https://cdn.example.com/subs/en.vtt",
+      label: "English",
+      language: "en",
+    },
+    {
+      src: "https://cdn.example.com/subs/fr.vtt",
+      label: "French",
+      language: "fr",
+    },
+  ],
+};
+```
+
+## Returning multiple quality levels
+
+For HLS sources that expose discrete quality variants, include a `qualities` array. nano proxies each quality URL independently and exposes them to the player's quality selector:
+
+```javascript
+return {
+  url: "https://cdn.example.com/master.m3u8", // default / highest quality
+  isM3U8: true,
+  subtitles: [
+    { src: "https://cdn.example.com/subs/en.vtt", label: "English", language: "en" },
+  ],
+  qualities: [
+    { label: "1080p", url: "https://cdn.example.com/1080.m3u8" },
+    { label: "720p",  url: "https://cdn.example.com/720.m3u8"  },
+    { label: "480p",  url: "https://cdn.example.com/480.m3u8"  },
+  ],
+};
+```
+
+## Providing custom stream headers
+
+Some CDNs require specific `Referer` or `Origin` headers. Return them in a `headers` object and nano will merge them into the proxy request (plugin-provided values override the inferred ones):
+
+```javascript
+return {
+  url: "https://cdn.example.com/stream.m3u8",
+  isM3U8: true,
+  headers: {
+    Referer: "https://example.com/",
+    Origin:  "https://example.com",
+  },
+  subtitles: [],
+};
+```
+
+## Compiling and encrypting a plugin
+
+Use the `compile-rink.mjs` script to bundle and encrypt a single source file. The script uses esbuild to bundle your TypeScript or JavaScript source into a self-contained CommonJS module, then encrypts the output and writes a binary `.rink` file.
+
+```bash
+node scripts/compile-rink.mjs <source-file> [outDir] [aliasId] [aliasName]
+```
+
+<Steps>
+  <Step title="Write your plugin source">
+    Create your plugin at any path, for example `src/shade/dev/my-source.ts` (or `.js`). Export a `ScraperPlugin` via `module.exports`.
+  </Step>
+  <Step title="Compile to .rink">
+    Run the compiler, pointing it at your source file. If you omit `outDir`, the `.rink` is written beside the source file. If you omit `aliasId`, the file's `key` field is used as the output filename.
+
+    ```bash
+    # Output: src/shade/catalog/my-source.rink
+    node scripts/compile-rink.mjs src/shade/dev/my-source.ts src/shade/catalog
+    ```
+
+    You can override the plugin `key` and `name` at compile time using the optional alias arguments:
+
+    ```bash
+    # Rewrites key to "custom-id" and name to "Custom Source" in the bundle
+    node scripts/compile-rink.mjs src/shade/dev/my-source.ts src/shade/catalog custom-id "Custom Source"
+    ```
+  </Step>
+  <Step title="Compile all sources at once">
+    To recompile every source in `src/shade/dev/` (as mapped in `scripts/rink-aliases.mjs`), use the `compile-rinks` script:
+
+    ```bash
+    pnpm compile-rinks
+    # or directly:
+    node scripts/compile-all-rinks.mjs
+    ```
+
+    To build only the publicly listed sources:
+
+    ```bash
+    pnpm compile-rinks:public
+    # or:
+    node scripts/compile-all-rinks.mjs --public
+    ```
+  </Step>
+  <Step title="Install the compiled plugin">
+    Copy the `.rink` into the active plugins directory so nano loads it at runtime:
+
+    ```bash
+    # Using shiopa (also registers in config.shiopa.ts automatically):
+    shiopa add my-source
+
+    # Or copy manually:
+    cp src/shade/catalog/my-source.rink src/shade/private/
+    ```
+
+    If you copied manually, also add an entry to the `servers` array in `src/components/shiopa/config.shiopa.ts`:
+
+    ```typescript
+    servers: [
+      { id: "my-source", name: "My Source" },
+      // ... other servers
+    ],
+    ```
+  </Step>
+</Steps>
+
+## Registering a source alias
+
+If you maintain multiple source files and compile them all with `compile-all-rinks.mjs`, add a mapping to `scripts/rink-aliases.mjs` so the compiler knows which alias ID and display name to apply:
+
+```javascript
+// scripts/rink-aliases.mjs
+export const RINK_ALIAS_BY_FILE = {
+  // existing entries ...
+  "my-source.ts": { id: "my-source", name: "My Source" },
+  // mark public: true to include in --public builds
+  "my-public-source.ts": { id: "my-public-source", name: "My Public Source", public: true },
+};
+```
+
+## Encryption details
+
+The following is informational — the compile script handles all of this automatically.
+
+| Property        | Value |
+|-----------------|-------|
+| Algorithm       | AES-256-CBC |
+| Key derivation  | `crypto.scryptSync(passphrase, "rink-salt-nano-67", 32)` |
+| Binary layout   | `[16 bytes IV] [32 bytes HMAC-SHA256] [ciphertext]` |
+| On-disk format  | Binary (raw bytes) — base64 is also accepted by the decryptor |
+| HMAC validation | Computed over `iv + ciphertext`; verified with `crypto.timingSafeEqual` before decryption |
+
+A `.rink` file that fails HMAC verification is rejected with a "Corrupted rink file" error and silently skipped during plugin loading.

@@ -1,0 +1,122 @@
+---
+title: "GET /api/proxy — CORS proxy for HLS streams"
+sidebarTitle: "/api/proxy"
+description: "nano's server-side proxy fetches remote stream URLs, rewrites M3U8 playlist segment paths through the proxy, and strips restrictive CORS/CSP headers for browser playback."
+---
+
+`/api/proxy` is the core of nano's streaming infrastructure. It fetches remote URLs from the server, rewrites HLS playlist segment paths so they also pass through the proxy, and strips restrictive response headers (such as `Content-Security-Policy` and `X-Frame-Options`) that would otherwise prevent the browser from playing the stream. Every URL returned by `/api/scrape` is already wrapped in a proxy URL — you do not need to proxy them again yourself.
+
+## Two Request Modes
+
+The proxy supports two calling conventions depending on the use case.
+
+### Data Mode (base64-encoded)
+
+This is the mode nano uses internally for all stream and segment requests. The `data` parameter is a base64-encoded JSON payload containing the target URL and any custom headers required to fetch it (e.g. `Referer`, `Origin`).
+
+```
+GET /api/proxy?data=<base64>&isSegment=true
+```
+
+<ParamField query="data" type="string" required>
+  Base64-encoded JSON object with the following shape:
+
+  ```json
+  {
+    "url": "https://cdn.example.com/stream/index.m3u8",
+    "headers": {
+      "Referer": "https://player.example.com/",
+      "Origin": "https://player.example.com"
+    }
+  }
+  ```
+</ParamField>
+
+<ParamField query="isSegment" type="boolean">
+  Hint that this request is for an HLS media segment (`.ts`, `.m4s`, `.aac`) rather than a playlist. When `true`, the response is cached with `Cache-Control: public, max-age=600, immutable`. The proxy also infers this automatically from the target URL's extension.
+</ParamField>
+
+### Simple Mode
+
+For straightforward proxy needs such as subtitle fetching, you can pass the target URL directly as a query parameter.
+
+```
+GET /api/proxy?url=<url>&referer=<referer>&origin=<origin>
+```
+
+<ParamField query="url" type="string" required>
+  The full target URL to fetch.
+</ParamField>
+
+<ParamField query="referer" type="string">
+  Value to send as the `Referer` request header to the target server.
+</ParamField>
+
+<ParamField query="origin" type="string">
+  Value to send as the `Origin` request header to the target server.
+</ParamField>
+
+<ParamField query="userAgent" type="string">
+  Custom `User-Agent` string. Defaults to a standard Chrome user-agent string.
+</ParamField>
+
+## M3U8 Playlist Rewriting
+
+When the proxy detects that the fetched content is an HLS playlist (by URL extension, `Content-Type`, or body inspection for `#EXTM3U`), it rewrites every segment and nested playlist URL in the file so that they also route through `/api/proxy`. This ensures the entire multi-level HLS stream plays without CORS issues — the browser only ever talks to your nano origin.
+
+Relative segment URLs are resolved against the playlist's base path before being encoded. For example, a line like:
+
+```
+segment_0001.ts
+```
+
+becomes:
+
+```
+/api/proxy?data=<base64-of-{"url":"https://cdn.example.com/hls/segment_0001.ts","headers":{...}}>&isSegment=true
+```
+
+URI values inside `#EXT-X-KEY` and other tags are similarly rewritten.
+
+## SRT to WebVTT Conversion
+
+When the target URL ends in `.srt`, the proxy automatically converts the subtitle content to WebVTT format before returning it. The `Content-Type` is set to `text/vtt`. This allows browsers to consume SRT subtitles natively without a client-side conversion step.
+
+## Response Headers
+
+The proxy sets the following headers on all responses:
+
+| Header | Value |
+|---|---|
+| `Access-Control-Allow-Origin` | `*` |
+| `Access-Control-Allow-Methods` | `GET, POST, HEAD, OPTIONS` |
+| `Access-Control-Allow-Headers` | `*` |
+| `Access-Control-Expose-Headers` | `Content-Length, Content-Range, Content-Type, X-Proxy-Set-Cookie` |
+| `Cache-Control` (playlist) | `public, max-age=3` |
+| `Cache-Control` (segment) | `public, max-age=600, immutable` |
+
+The following upstream headers are **stripped** from the proxied response:
+
+- `Content-Security-Policy`
+- `X-Frame-Options`
+- `Content-Encoding`
+- `Transfer-Encoding`
+
+## HEAD and OPTIONS
+
+`HEAD` requests are handled identically to `GET` (the same handler is reused). `OPTIONS` requests return a `204 No Content` CORS preflight response with a 24-hour `Access-Control-Max-Age`.
+
+## Example
+
+```bash
+# Proxy a subtitle file (simple mode) — returned as WebVTT
+curl "http://localhost:3000/api/proxy?url=https://example.com/subs/en.srt"
+
+# Proxy an HLS playlist (data mode)
+DATA=$(echo -n '{"url":"https://cdn.example.com/stream/index.m3u8","headers":{"Referer":"https://player.example.com/"}}' | base64)
+curl "http://localhost:3000/api/proxy?data=${DATA}"
+```
+
+<Warning>
+  `/api/proxy` is designed exclusively for stream URLs resolved by nano's scraper plugins. It should not be used as a general-purpose web proxy. Exposing it as such on a public instance may violate third-party terms of service and create unintended bandwidth costs.
+</Warning>

@@ -1,0 +1,128 @@
+---
+title: "Deploy nano to Cloudflare Workers and Pages"
+sidebarTitle: "Cloudflare"
+description: "Deploy nano to Cloudflare Workers using the Astro Cloudflare adapter. Understand feature limitations including local file streaming and PostgreSQL support."
+---
+
+Cloudflare Workers and Pages offer globally distributed, low-latency hosting for nano. When nano detects that it is being built for Cloudflare, it automatically switches to the `@astrojs/cloudflare` adapter, compiling the app into a `_worker.js` bundle that runs natively in the Workers runtime. The repository ships a `wrangler.toml` that pre-configures the deployment.
+
+## How nano Detects Cloudflare
+
+The `astro.config.mjs` adapter selection checks three environment variables at build time:
+
+- `CF_PAGES=1` — set by Cloudflare Pages CI automatically
+- `CLOUDFLARE=1` — set this manually when deploying to Workers
+- `WORKERS_CI=1` — alternative flag for Workers CI pipelines
+
+If any of these is present, nano uses `@astrojs/cloudflare` instead of the default Node adapter. You must set at least one of them when building locally for a Cloudflare target.
+
+## wrangler.toml
+
+The repository includes a `wrangler.toml` for deploying via the Wrangler CLI:
+
+```toml
+name = "nano"
+main = "./dist/_worker.js"
+compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2026-03-02"
+keep_vars = true
+
+[assets]
+directory = "./dist"
+
+[vars]
+PORT = "3000"
+HOST = "0.0.0.0"
+```
+
+- **`main`** — points to the compiled Worker entry file produced by `pnpm build`.
+- **`compatibility_flags = ["nodejs_compat"]`** — enables Node.js compatibility APIs in the Workers runtime (required for Astro's Cloudflare adapter).
+- **`[assets]`** — serves the static files from the `dist/` directory alongside the Worker.
+- **`[vars]`** — sets `PORT` and `HOST` as Worker environment variables. Additional runtime variables can be added here or configured in the Cloudflare dashboard.
+
+## Deploy to Cloudflare
+
+<Steps>
+  <Step title="Install Wrangler">
+    Wrangler is already listed as a dev dependency in nano. If it is not yet installed, add it:
+
+    ```bash
+    pnpm add -D wrangler
+    ```
+
+    Verify it is available:
+
+    ```bash
+    pnpm wrangler --version
+    ```
+  </Step>
+
+  <Step title="Set the Cloudflare build flag">
+    Before building, set the environment variable that tells nano to use the Cloudflare adapter:
+
+    ```bash
+    # for Cloudflare Workers
+    export CLOUDFLARE=1
+
+    # or for Cloudflare Pages CI (set automatically by Pages)
+    export CF_PAGES=1
+    ```
+  </Step>
+
+  <Step title="Build the app">
+    ```bash
+    pnpm build
+    ```
+
+    The Astro Cloudflare adapter compiles nano into `dist/_worker.js` and copies static assets to `dist/`.
+  </Step>
+
+  <Step title="Deploy with Wrangler">
+    ```bash
+    wrangler pages deploy dist/
+    ```
+
+    Wrangler uploads your `dist/` directory to Cloudflare Pages. On first run, Wrangler asks you to authenticate and select or create a Pages project. Subsequent deploys update the same project.
+  </Step>
+</Steps>
+
+## Configuring Environment Variables
+
+Runtime variables for Cloudflare Workers can be set in two places:
+
+1. **`wrangler.toml` `[vars]` section** — for non-secret, version-controlled variables.
+2. **Cloudflare dashboard → Workers & Pages → Settings → Environment Variables** — for secrets such as `TMDB_API_KEY`.
+
+Add your variables to `wrangler.toml` or the dashboard before deploying:
+
+```toml
+[vars]
+PORT = "3000"
+HOST = "0.0.0.0"
+SITE_NAME = "my nano"
+DEFAULT_SERVER = "nemu"
+THEME_HUE = "200"
+THEME_MODE = "dark"
+DATABASE_TYPE = "json"
+```
+
+For sensitive values, use Wrangler secrets instead:
+
+```bash
+wrangler secret put TMDB_API_KEY
+wrangler secret put TMDB_ACCESS_TOKEN
+```
+
+## Limitations on Cloudflare
+
+<Warning>
+  The following features are **not available** when nano is deployed to Cloudflare Workers:
+
+  - **`/api/stream` (local file streaming)** — returns HTTP 501. The Workers runtime has no filesystem access, so serving local video files is not supported.
+  - **PostgreSQL (`pg`)** — the `pg` native driver is not compatible with the Workers runtime. You must use `DATABASE_TYPE=json`. The `pg`, `pg-pool`, and related packages are externalized at build time.
+  - **Playwright / headless browser scraping** — `playwright-core` and `chromium-bidi` are excluded from the Cloudflare build and will not function in Workers.
+</Warning>
+
+<Note>
+  Remote stream proxying through `/api/proxy` works correctly on Cloudflare. TMDB metadata lookups, search, and all UI features work as expected. Only features that require local filesystem access or native Node.js modules are restricted.
+</Note>

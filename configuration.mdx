@@ -1,0 +1,216 @@
+---
+title: "Configure nano with environment variables"
+sidebarTitle: "Configuration"
+description: "All nano settings are controlled via environment variables. Covers server, TMDB, database, theming, features, and video player options with defaults and valid values."
+---
+
+nano is configured entirely at runtime via environment variables — there is no settings UI and no database-backed config table. Every option from the site name to the video player behaviour is a single env var. This means you can reconfigure a running Docker container by restarting it with different flags, or adjust a local instance by editing `.env` and restarting the dev server, all without touching source code or triggering a new build.
+
+## Setup
+
+**Local development** — copy `.env.example` to `.env` in the project root and edit the values:
+
+```bash
+cp .env.example .env
+# then open .env in your editor
+```
+
+Or run the interactive setup helper which does this for you and prints a config summary:
+
+```bash
+node setup.js
+```
+
+**Docker** — pass variables as `-e` flags or mount a `.env` file:
+
+```bash
+# individual flags
+docker run -p 3000:3000 \
+  -e SITE_NAME="my nano" \
+  -e THEME_MODE="dark" \
+  ghcr.io/mohameodo/nano:latest
+
+# full env file
+docker run -p 3000:3000 --env-file .env ghcr.io/mohameodo/nano:latest
+```
+
+---
+
+## Server
+
+These variables control how the Node.js server binds to the network. They are set automatically when using the Docker image but can be overridden.
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3000` | HTTP port the server listens on. |
+| `HOST` | `0.0.0.0` | Bind address. `0.0.0.0` listens on all interfaces; use `127.0.0.1` to restrict to localhost. |
+
+---
+
+## TMDB (Optional)
+
+nano uses [The Movie Database (TMDB)](https://www.themoviedb.org/) for all search results, metadata, posters, and episode data. A built-in fallback key is bundled, so both variables are optional — you only need your own if you want to avoid shared rate limits or require a specific account tier.
+
+| Variable | Default | Description |
+|---|---|---|
+| `TMDB_API_KEY` | built-in fallback | TMDB v3 API key. Obtain one for free at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api). |
+| `TMDB_ACCESS_TOKEN` | built-in fallback | TMDB v4 Bearer (Read Access) token. Used for v4 API endpoints when present. |
+
+---
+
+## Database (Optional)
+
+nano supports two persistence backends for user data (watchlists, continue watching, local library). The default JSON backend requires no external services and stores data on the local filesystem.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | — | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/dbname`). Required when `DATABASE_TYPE=postgres`. |
+| `DATABASE_TYPE` | `json` | Storage backend. `json` uses a local JSON file; `postgres` uses a PostgreSQL database. Auto-detected from `DATABASE_URL` when set. |
+
+---
+
+## Site
+
+Core identity settings for the site — name, SEO metadata, and default language.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SITE_NAME` | `shiopa nano` | Display name shown in the logo and throughout the UI. |
+| `METADATA_TITLE` | `shiopa nano` | Browser tab title and `<title>` tag value. |
+| `METADATA_DESCRIPTION` | `a minimalist web interface for shiopa nano. search for movies and tv shows instantly without bloat.` | SEO meta description for search engines and link previews. |
+| `METADATA_THUMBNAIL` | `/icons/nano-pet.svg` | Open Graph (`og:image`) path or URL used for social link previews. |
+| `DEFAULT_LOCALE` | `en` | Default UI language code. Users can override this at runtime via the header language selector. Supported codes include `en`, `fr`, `de`, `es`, `ja`, and 11 others. |
+
+---
+
+## Theme
+
+nano's visual appearance is fully themeable at runtime. Changes take effect on the next server start — no rebuild required.
+
+### Palette & Colours
+
+| Variable | Default | Description |
+|---|---|---|
+| `THEME_PALETTE` | `color` | Colour mode. `color` uses the accent hue; `monochrome` forces a black-and-white palette. |
+| `THEME_HUE` | `200` | Accent colour hue on the 0–360 colour wheel. `200` is a light blue. Try `310` for pink/purple, `120` for green, or `30` for orange. |
+| `THEME_MODE` | `dark` | Base colour scheme. `dark` or `light`. |
+| `COLOR_BG_DARK` | `#000000` | Background hex colour used in dark mode. |
+| `COLOR_BG_LIGHT` | `#ffffff` | Background hex colour used in light mode. |
+
+### Background Style
+
+| Variable | Default | Description |
+|---|---|---|
+| `THEME_BG_STYLE` | `neon-dither` | Background texture pattern. See values below. |
+| `THEME_CUSTOM_BG` | — | URL of a custom background image. When set, overrides `THEME_BG_STYLE`. |
+| `THEME_FONT_FAMILY` | — | CSS `font-family` string applied site-wide (e.g. `"Inter, sans-serif"`). |
+
+**`THEME_BG_STYLE` values:**
+
+| Value | Description |
+|---|---|
+| `falling` | Animated falling dither-dot shader. |
+| `neon-dither` | Animated wave dither shader (default). |
+| `dots` | Static dot grid. |
+| `lines` | Static line grid. |
+| `thin-lines` | Static thin line grid. |
+| `text` | Repeating text pattern. |
+| `grain` | Subtle noise/grain overlay. |
+| `none` | Solid background colour only. |
+
+---
+
+## Greeting & Logo
+
+Controls the animated greeting and logo shown on the home page.
+
+| Variable | Default | Description |
+|---|---|---|
+| `GREETING_STYLE` | `nano-pet` | Style of the home-page greeting. See values below. |
+| `SHOW_GREETING` | `true` | Show or hide the greeting area entirely. `true` or `false`. |
+| `SHOW_ICON` | `false` | Show a React icon next to the site name in the logo. `true` or `false`. |
+| `USE_MIXED_FANCY_FONT` | `true` | Mix decorative fonts in the logo text. `true` or `false`. |
+| `LOGO_SIZE` | `lg` | Logo size. `sm`, `md`, `lg`, or `xl`. |
+| `LOGO_FONT_FAMILY` | — | CSS `font-family` string applied to the logo text only. Overrides `THEME_FONT_FAMILY` for the logo. |
+
+**`GREETING_STYLE` values:**
+
+| Value | Description |
+|---|---|
+| `nano-pet` | Animated mesh pet companion (default). |
+| `slogans` | Rotating greeting slogans. |
+| `logo` | Static site logo/wordmark. |
+| `icon` | A React icon (configure with `CUSTOM_ICON`). |
+| `gif` | A custom GIF image (configure with `CUSTOM_GIF`). |
+| `logo-and-icon` | Icon alongside the site name. |
+
+### Custom Icon
+
+<ParamField path="CUSTOM_ICON" type="string">
+  Icon identifier used when `GREETING_STYLE=icon` or `SHOW_ICON=true`. Valid values: `tv`, `film`, `play`, `video`, `ticket`, `camera`, `gamepad`, `headphones`, `disc`, `media`.
+</ParamField>
+
+### Custom GIF
+
+| Variable | Default | Description |
+|---|---|---|
+| `CUSTOM_GIF` | — | URL of a GIF image to display when `GREETING_STYLE=gif`. |
+| `CUSTOM_GIF_WIDTH` | — | CSS width of the GIF (e.g. `200px`). |
+| `CUSTOM_GIF_HEIGHT` | — | CSS height of the GIF (e.g. `200px`). |
+| `CUSTOM_GIF_MARGIN` | — | CSS margin around the GIF (e.g. `0 auto`). |
+
+---
+
+## Header Controls
+
+Toggle the interactive controls shown in the site header. Hiding these locks the UI to your server-defined defaults.
+
+| Variable | Default | Description |
+|---|---|---|
+| `HEADER_SHOW_THEME_TOGGLE` | `true` | Show the dark/light mode toggle button. `true` or `false`. |
+| `HEADER_SHOW_COLOR_PICKER` | `true` | Show the accent hue colour picker. `true` or `false`. |
+| `HEADER_SHOW_LANG_SELECTOR` | `true` | Show the language selector dropdown. `true` or `false`. |
+
+---
+
+## Features
+
+Feature flags that enable or disable major nano capabilities.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SHOW_WATERMARKS` | `false` | Show a matrix-style overlay grid on the background. `true` or `false`. |
+| `SHOW_TRENDING` | `false` | Display a trending movies/shows section on the home page. `true` or `false`. |
+| `SHOW_QUICK_TAGS` | `false` | Display genre quick-filter tags on the home page. `true` or `false`. |
+| `ENABLE_AUTH` | `false` | Enable a simple local login page to password-protect the instance. `true` or `false`. |
+| `ENABLE_LOCAL_LIBRARY` | `false` | Enable a personal local media library alongside scraped results. `true` or `false`. |
+| `ENABLE_LOCAL_LIBRARY_EDITING` | `false` | Allow editing entries in the local media library. `true` or `false`. Requires `ENABLE_LOCAL_LIBRARY=true`. |
+
+---
+
+## Ghost Companion
+
+The Ghost is an optional interactive companion that lives on the page. It can display AI-powered speech bubbles (via Woozlit) and react to searches and clicks.
+
+| Variable | Default | Description |
+|---|---|---|
+| `GHOST_HAT` | `false` | Show a pirate hat overlay on the Ghost companion. `true` or `false`. |
+| `GHOST_FLYING` | `false` | Enable the Ghost companion to float and bounce around the screen. `true` or `false`. |
+| `GHOST_TTS` | `false` | Enable Text-to-Speech voice synthesis for the Ghost companion's speech bubbles. `true` or `false`. |
+| `WOOZLIT_API_KEY` | — | API key for fetching AI reactions from [woozlit.com](https://api.woozlit.com). When set, the Ghost reacts to searches and click events with AI-generated responses. |
+
+---
+
+## Video Player
+
+Settings that control stream playback behaviour and the video player interface.
+
+| Variable | Default | Description |
+|---|---|---|
+| `AUTOPLAY` | `true` | Automatically start video playback when a stream loads. `true` or `false`. |
+| `USE_VIDSTACK` | `false` | Use the advanced [Vidstack](https://vidstack.io) player instead of the built-in custom HTML5 player. `true` or `false`. Vidstack provides quality selection, keyboard shortcuts, and richer controls. |
+| `DEFAULT_SERVER` | `nemu` | Default scraper server ID loaded when opening the player. The production default in `config.shiopa.ts` is `rei`; `.env.example` ships with `nemu`. Set this to your preferred server ID. |
+
+<Note>
+  Available server IDs depend on which `.rink` plugin files you have installed. The full list of IDs for your instance is printed by the `shiopa` CLI when you add sources. In development mode additional servers (`momo`, `xpass`, `hana`, `nemu`, `kisskh`, `haru`, `sora`, `yuki`, and more) are exposed automatically.
+</Note>

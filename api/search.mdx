@@ -1,0 +1,114 @@
+---
+title: "GET /api/search — search movies and TV shows"
+sidebarTitle: "/api/search"
+description: "Search TMDB for movies and TV shows by query string. Returns paginated results with title, poster, media type, and release date. Falls back to static results if TMDB is unavailable."
+---
+
+`/api/search` queries the TMDB API for both movies and TV shows simultaneously, merges the results, and sorts them by popularity. It is the backbone of nano's search bar and can be called directly to build custom search experiences against your nano instance.
+
+## Request
+
+**Method:** `GET`  
+**Path:** `/api/search`
+
+<ParamField query="q" type="string" required>
+  The search query string. If empty or omitted, the endpoint returns `{ results: [], total_pages: 1 }` immediately without calling TMDB.
+</ParamField>
+
+<ParamField query="page" type="string" default="1">
+  Page number for paginated results. Passed directly to TMDB's search API.
+</ParamField>
+
+<ParamField query="lang" type="string">
+  TMDB language code for localized results (e.g. `en`, `fr`, `es`, `de`). When omitted, TMDB returns its default language.
+</ParamField>
+
+## Response
+
+**Content-Type:** `application/json`
+
+<ResponseField name="results" type="array">
+  Array of result objects. Movies and TV shows are mixed together and sorted by `popularity` descending.
+
+  <Expandable title="Result object fields">
+    <ResponseField name="id" type="number">
+      TMDB ID of the title.
+    </ResponseField>
+    <ResponseField name="title" type="string">
+      Movie title. Present on `media_type: "movie"` results only.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      TV show name. Present on `media_type: "tv"` results only.
+    </ResponseField>
+    <ResponseField name="poster_path" type="string">
+      TMDB poster image path. Prefix with `https://image.tmdb.org/t/p/w500` to build the full image URL.
+    </ResponseField>
+    <ResponseField name="media_type" type="string">
+      Either `"movie"` or `"tv"`.
+    </ResponseField>
+    <ResponseField name="release_date" type="string">
+      Release date in `YYYY-MM-DD` format. Present on movies only.
+    </ResponseField>
+    <ResponseField name="first_air_date" type="string">
+      Premiere date in `YYYY-MM-DD` format. Present on TV shows only.
+    </ResponseField>
+    <ResponseField name="popularity" type="number">
+      TMDB popularity score. Results are sorted by this value, highest first.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="total_pages" type="number">
+  Total number of result pages available from TMDB. Use the `page` parameter to paginate through them. When the fallback list is returned, this is always `1`.
+</ResponseField>
+
+## Example
+
+```bash
+curl "http://localhost:3000/api/search?q=inception&lang=en"
+```
+
+```json
+{
+  "results": [
+    {
+      "id": 27205,
+      "title": "Inception",
+      "poster_path": "/oYu2Qhx0qbSgLN7IQalj27YchgY.jpg",
+      "media_type": "movie",
+      "release_date": "2010-07-15",
+      "popularity": 87.3,
+      "overview": "Cobb, a skilled thief who commits corporate espionage..."
+    },
+    {
+      "id": 1408,
+      "title": "Inception: The Cobol Job",
+      "poster_path": "/rXJPRQ2J9rlmDU7ygRYfzBOhHsP.jpg",
+      "media_type": "movie",
+      "release_date": "2010-12-07",
+      "popularity": 12.1
+    }
+  ],
+  "total_pages": 1
+}
+```
+
+## Fallback Behavior
+
+If TMDB returns no results (e.g. an unusual query with zero hits) or if the TMDB request fails entirely, `/api/search` falls back to a built-in static list of popular titles and filters it by the search query string. The fallback list contains:
+
+| Title | TMDB ID | Type |
+|---|---|---|
+| Inception | 27205 | movie |
+| Interstellar | 157336 | movie |
+| The Dark Knight | 155 | movie |
+| Breaking Bad | 1396 | tv |
+| Stranger Things | 66732 | tv |
+| Wednesday | 119051 | tv |
+| Squid Game | 93405 | tv |
+
+Fallback responses always have `total_pages: 1`.
+
+<Note>
+  Submitting an empty `q` parameter (e.g. `/api/search?q=`) returns `{ "results": [], "total_pages": 1 }` immediately. The TMDB API is never called in this case, so there is no latency cost.
+</Note>

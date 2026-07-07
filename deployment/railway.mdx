@@ -1,0 +1,94 @@
+---
+title: "Deploy nano to Railway with one click"
+sidebarTitle: "Railway"
+description: "Deploy nano to Railway using Nixpacks. Set environment variables in the Railway dashboard and run the built server with node dist/server/entry.mjs."
+---
+
+Railway is a developer platform that can deploy nano directly from a GitHub repository with no extra configuration. nano ships a `railway.json` that tells Railway to build with Nixpacks and start the compiled Node.js server — the whole setup is handled automatically.
+
+## How It Works
+
+The repository includes a `railway.json` at the project root:
+
+```json
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "node dist/server/entry.mjs",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
+```
+
+- **`builder: "NIXPACKS"`** — Railway uses [Nixpacks](https://nixpacks.com) to auto-detect the Node.js environment, install pnpm, and run `pnpm build`.
+- **`startCommand`** — launches the compiled Astro Node standalone server directly. No extra wrapper script is needed.
+- **`restartPolicyType: "ON_FAILURE"`** — Railway restarts the service automatically if it crashes.
+
+Because Railway provides the Node adapter via the default `@astrojs/node` path (no `VERCEL` or `CF_PAGES` variables are set), nano builds with the standard standalone Node output.
+
+## Deploy to Railway
+
+<Steps>
+  <Step title="Connect your GitHub repository">
+    Log in to [railway.app](https://railway.app), click **New Project → Deploy from GitHub repo**, and select your nano repository. Railway immediately queues a build.
+  </Step>
+
+  <Step title="Railway builds with Nixpacks">
+    Railway reads `railway.json`, detects Node.js, installs pnpm via corepack, and runs `pnpm build`. No additional build configuration is required.
+  </Step>
+
+  <Step title="Set environment variables">
+    Go to your service in the Railway dashboard, open **Variables**, and add your configuration:
+
+    | Variable | Recommended value | Notes |
+    |----------|------------------|-------|
+    | `PORT` | `3000` | Railway may set this automatically |
+    | `HOST` | `0.0.0.0` | Required for Railway's internal networking |
+    | `TMDB_API_KEY` | *(your key)* | Optional — built-in fallback exists |
+    | `TMDB_ACCESS_TOKEN` | *(your token)* | Optional — built-in fallback exists |
+    | `SITE_NAME` | `my nano` | Display name in the UI |
+    | `DEFAULT_SERVER` | `nemu` | Default streaming server |
+    | `ENABLE_AUTH` | `false` | Set `true` to enable login page |
+    | `DATABASE_TYPE` | `json` | Or `postgres` if you add a Railway PostgreSQL plugin |
+    | `DATABASE_URL` | *(from Railway plugin)* | Auto-provided when you attach a Postgres service |
+  </Step>
+
+  <Step title="Deploy">
+    Railway triggers a deploy automatically after you add variables. You can also click **Deploy** manually from the service dashboard. Once the build finishes, Railway provides a public `.up.railway.app` URL.
+  </Step>
+</Steps>
+
+<Tip>
+  Railway injects the `PORT` environment variable automatically into every service. nano reads `process.env.PORT` at startup, so your server will bind to the correct port without any changes. Still, setting `HOST=0.0.0.0` explicitly is recommended to ensure the server accepts external connections inside Railway's network.
+</Tip>
+
+## PostgreSQL on Railway
+
+Railway has a first-party PostgreSQL plugin. Add it to your project, and Railway automatically injects `DATABASE_URL` into your nano service. Set `DATABASE_TYPE=postgres` to tell nano to use it instead of the default local JSON storage.
+
+## Deploying to Render
+
+nano also ships a `render.yaml` for [Render](https://render.com), which follows the same Node.js deployment pattern:
+
+```yaml
+services:
+  - type: web
+    name: shiopa-nano
+    runtime: node
+    buildCommand: pnpm install && pnpm build
+    startCommand: node dist/server/entry.mjs
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: HOST
+        value: 0.0.0.0
+      - key: TMDB_API_KEY
+        sync: false
+      - key: TMDB_ACCESS_TOKEN
+        sync: false
+```
+
+To deploy on Render, connect your GitHub repository in the Render dashboard and it will detect `render.yaml` automatically. The build command (`pnpm install && pnpm build`) and start command (`node dist/server/entry.mjs`) are identical to the Railway setup.
